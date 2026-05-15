@@ -331,6 +331,7 @@ if prompt := st.chat_input("Ask a follow-up or travel question..."):
     msgs = list(state.get("messages", []))
     msgs.append({"role": "user", "content": prompt})
     state["messages"] = msgs
+    state["intent"] = "unknown"  # re-classify each new chat message from scratch
     state["tavily_context"] = []
     state["tool_call_count"] = 0
     state["final_response"] = None

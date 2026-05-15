@@ -32,10 +32,12 @@ Return ONLY valid JSON — no markdown, no explanation — with this structure:
 }}
 
 Rules:
-- intent is "planning" if the user wants an itinerary or trip plan.
-- intent is "question" if the user is asking a specific travel question.
-- For planning, critical fields are destination AND (duration_days OR start_date).
-- List field names in clarification_needed only when planning and they are missing.
+- intent is "planning" ONLY if the user explicitly asks for an itinerary, a trip plan, or says "plan my trip". Examples: "Plan a 5-day trip to Rome", "Create an itinerary for Tokyo".
+- intent is "question" for ANY other travel-related message — weather, best time to visit, visa, restaurants, transport, costs, safety, recommendations, comparisons. When in doubt, use "question".
+- Examples of "question": "What is the best time to visit Barcelona?", "Which restaurants are vegetarian in Madrid?", "Do I need a visa for Japan?", "How do I get from Paris to Lyon?", "What should I pack for Iceland in winter?"
+- For planning, critical fields are destination AND (duration_days OR start_date). List only truly missing fields in clarification_needed.
+- For question intent, always set travel_question to the full user message text. Never leave it null.
+- clarification_needed must be empty [] for question intent.
 - budget_level defaults to "mid_range" if not mentioned.
 - pace defaults to "moderate" if not mentioned."""
 

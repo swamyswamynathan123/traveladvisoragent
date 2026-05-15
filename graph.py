@@ -93,17 +93,31 @@ def collect_requirements_node(state: dict) -> dict:
             ),
         }
 
+        # If planning intent is incomplete and the message looks like a question,
+        # treat it as question intent to avoid spurious clarification requests.
+        is_planning_complete = collected_info.get("is_complete_for_planning", False)
+        question_words = ("what", "when", "where", "how", "which", "why", "is ", "are ",
+                          "do ", "can ", "should ", "would ", "?")
+        message_is_question = any(latest.lower().startswith(w) or latest.endswith("?")
+                                  for w in question_words)
+        if intent == "planning" and not is_planning_complete and message_is_question:
+            intent = "question"
+            travel_q = travel_q or latest
+
+        # Ensure travel_question is never null when intent is "question"
+        resolved_question = travel_q or (latest if intent == "question" else None)
+
         return {
             **state,
             "intent": intent,
             "trip_request": trip_req if intent == "planning" else state.get("trip_request"),
             "travel_question": (
-                {"question": travel_q, "context": None}
-                if travel_q
+                {"question": resolved_question, "context": None}
+                if resolved_question
                 else state.get("travel_question")
             ),
             "collected_info": collected_info,
-            "clarification_questions": clarification_needed,
+            "clarification_questions": clarification_needed if intent == "planning" else [],
         }
 
     except (json.JSONDecodeError, Exception) as exc:
