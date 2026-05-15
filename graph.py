@@ -231,21 +231,40 @@ def search_with_tavily_node(state: dict) -> dict:
         trip_req = state.get("trip_request") or {}
         dest = trip_req.get("destination", "")
         start_date = trip_req.get("start_date", "")
-        enriched_q = f"{q} {dest}".strip() if dest and dest.lower() not in q.lower() else q
 
         restaurant_kw = ["restaurant", "eat", "food", "dining", "vegetarian", "vegan",
                          "halal", "kosher", "cafe", "cuisine", "where to eat"]
+        cuisine_kw = ["indian", "italian", "japanese", "chinese", "mexican", "thai",
+                      "mediterranean", "french", "spanish", "greek", "middle eastern",
+                      "korean", "turkish", "lebanese", "moroccan"]
         is_restaurant_q = any(kw in q.lower() for kw in restaurant_kw)
-        search_fn = tavily_search_advanced if is_restaurant_q else tavily_search
-        search_tasks.append((enriched_q, search_fn))
 
-        if dest and is_restaurant_q:
-            city_names = [c.strip() for c in re.split(r"[,+&]|\band\b", dest, flags=re.IGNORECASE) if c.strip()]
-            for city in city_names:
-                if city.lower() not in q.lower():
-                    search_tasks.append((f"{q} {city} recommended named list 2024", tavily_search_advanced))
-        elif start_date and dest:
-            search_tasks.append((f"{dest} weather {start_date}", tavily_search))
+        if is_restaurant_q:
+            # Build clean keyword queries — don't pass the full question to the search engine
+            cuisine_type = next((kw for kw in cuisine_kw if kw in q.lower()), "")
+            diet_type = next((kw for kw in ["vegetarian", "vegan", "halal", "kosher"] if kw in q.lower()), "")
+            food_label = " ".join(filter(None, [cuisine_type, diet_type])) or "popular"
+
+            # Collect cities from destination + any cities named in the question
+            dest_cities = [c.strip() for c in re.split(r"[,+&]|\band\b", dest, flags=re.IGNORECASE) if c.strip()] if dest else []
+            q_only_cities = [c for c in dest_cities if c.lower() in q.lower()]
+            search_cities = q_only_cities if q_only_cities else dest_cities
+            search_cities = search_cities[:3] if search_cities else []
+
+            if search_cities:
+                for city in search_cities:
+                    search_tasks.append((
+                        f"best {food_label} restaurants {city} 2024 recommended",
+                        tavily_search_advanced,
+                    ))
+            else:
+                enriched_q = f"{food_label} restaurants {dest or q}".strip()
+                search_tasks.append((enriched_q, tavily_search_advanced))
+        else:
+            enriched_q = f"{q} {dest}".strip() if dest and dest.lower() not in q.lower() else q
+            search_tasks.append((enriched_q, tavily_search))
+            if start_date and dest:
+                search_tasks.append((f"{dest} weather {start_date}", tavily_search))
 
     else:
         return state
