@@ -8,7 +8,7 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from schemas import ItineraryResponse, QuestionResponse, ClarificationResponse
-from tools import tavily_search
+from tools import tavily_search, tripadvisor_search
 from prompts import (
     SYSTEM_PROMPT,
     INTENT_DETECTION_PROMPT,
@@ -189,6 +189,11 @@ def search_with_tavily_node(state: dict) -> dict:
         logger.warning("MAX_TOOL_CALLS reached — skipping Tavily search")
         return state
 
+    import re
+
+    # Each entry is (query, search_fn) — TripAdvisor for restaurants/attractions, Tavily for everything else
+    search_tasks: list[tuple[str, object]] = []
+
     if intent == "planning":
         trip_req = state.get("trip_request") or {}
         dest = trip_req.get("destination", "")
@@ -196,58 +201,60 @@ def search_with_tavily_node(state: dict) -> dict:
         constraints = [str(c).lower() for c in trip_req.get("constraints", [])]
         constraint_text = " ".join(constraints)
 
-        queries = [
-            f"{dest} top attractions things to do",
-            f"{dest} travel tips transportation budget",
+        search_tasks += [
+            (f"{dest} top attractions things to do", tripadvisor_search),
+            (f"{dest} travel tips transportation budget", tavily_search),
         ]
         if interests:
             interests_str = " ".join(str(i) for i in interests[:2])
-            queries.append(f"{dest} {interests_str} recommendations")
+            search_tasks.append((f"{dest} {interests_str} recommendations", tripadvisor_search))
 
-        # Add targeted restaurant searches; for multi-city trips search each city individually
         dietary_keywords = ["vegetarian", "vegan", "halal", "kosher", "gluten", "dairy-free"]
         has_dietary = any(kw in constraint_text for kw in dietary_keywords)
         has_food_interest = any("food" in str(i).lower() or "dining" in str(i).lower() for i in interests)
         if has_dietary or has_food_interest:
-            import re
             city_names = [c.strip() for c in re.split(r"[,+&]|\band\b", dest, flags=re.IGNORECASE) if c.strip()]
             search_cities = city_names[:2] if len(city_names) > 1 else [dest]
             if has_dietary:
                 diet_type = next((kw for kw in dietary_keywords if kw in constraint_text), "special diet")
                 for city in search_cities:
-                    queries.append(f"{city} best {diet_type} restaurants recommended")
+                    search_tasks.append((f"{city} best {diet_type} restaurants", tripadvisor_search))
             else:
                 for city in search_cities:
-                    queries.append(f"{city} best restaurants must-try food")
+                    search_tasks.append((f"{city} best restaurants must-try food", tripadvisor_search))
+
     elif intent == "question":
-        import re
         q = (state.get("travel_question") or {}).get("question", "")
         trip_req = state.get("trip_request") or {}
         dest = trip_req.get("destination", "")
         start_date = trip_req.get("start_date", "")
         enriched_q = f"{q} {dest}".strip() if dest and dest.lower() not in q.lower() else q
-        queries = [enriched_q]
-        # For restaurant/food questions on multi-city trips, search each city individually
+
         restaurant_kw = ["restaurant", "eat", "food", "dining", "vegetarian", "vegan",
                          "halal", "kosher", "cafe", "cuisine", "where to eat"]
-        if dest and any(kw in q.lower() for kw in restaurant_kw):
+        is_restaurant_q = any(kw in q.lower() for kw in restaurant_kw)
+        search_fn = tripadvisor_search if is_restaurant_q else tavily_search
+        search_tasks.append((enriched_q, search_fn))
+
+        if dest and is_restaurant_q:
             city_names = [c.strip() for c in re.split(r"[,+&]|\band\b", dest, flags=re.IGNORECASE) if c.strip()]
             for city in city_names[:2]:
                 if city.lower() not in q.lower():
-                    queries.append(f"{q} {city}")
+                    search_tasks.append((f"{q} {city}", tripadvisor_search))
         elif start_date and dest:
-            queries.append(f"{dest} weather {start_date}")
+            search_tasks.append((f"{dest} weather {start_date}", tavily_search))
+
     else:
         return state
 
     budget = MAX_TOOL_CALLS - call_count
-    queries = queries[:budget]
+    search_tasks = search_tasks[:budget]
 
     accumulated: list = list(state.get("tavily_context", []))
     new_call_count = call_count
 
-    for query in queries:
-        result = tavily_search(query=query, search_depth="basic", max_results=5)
+    for query, search_fn in search_tasks:
+        result = search_fn(query=query, max_results=5)
         new_call_count += 1
         if result.tool_status == "ok":
             for r in result.results:

@@ -59,3 +59,12 @@ def tavily_search(
             tool_status="error",
             error_message=str(exc),
         )
+
+
+def tripadvisor_search(
+    query: str,
+    max_results: int = 5,
+) -> TavilySearchOutput:
+    """Search TripAdvisor via Tavily (site:tripadvisor.com) for ratings and reviews."""
+    targeted_query = f"site:tripadvisor.com {query}"
+    return tavily_search(query=targeted_query, search_depth="basic", max_results=max_results)
