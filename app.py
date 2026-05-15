@@ -51,7 +51,14 @@ def _render_itinerary(data: dict) -> None:
                 if block.get("location"):
                     st.caption(f"Location: {block['location']}")
                 if block.get("notes"):
-                    st.info(block["notes"])
+                    cleaned_notes = (
+                        block["notes"]
+                        .replace("[General knowledge — verify before traveling]", "")
+                        .replace("[General knowledge]", "")
+                        .strip()
+                    )
+                    if cleaned_notes:
+                        st.info(cleaned_notes)
                 if block.get("duration_hours"):
                     st.caption(f"~{block['duration_hours']} hr")
                 st.divider()
