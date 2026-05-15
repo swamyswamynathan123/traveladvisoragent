@@ -87,6 +87,32 @@ def _render_itinerary(data: dict) -> None:
                     if hotel.get("notes"):
                         st.caption(hotel["notes"])
 
+    restaurants = data.get("restaurant_suggestions", [])
+    if restaurants:
+        st.subheader("🍽️ Restaurant Suggestions")
+        by_city: dict = {}
+        for r in restaurants:
+            by_city.setdefault(r.get("city", "General"), []).append(r)
+        for city, city_restaurants in by_city.items():
+            st.markdown(f"**{city}**")
+            cols = st.columns(min(len(city_restaurants), 3))
+            for col, restaurant in zip(cols, city_restaurants):
+                with col:
+                    price = restaurant.get("price_range", "")
+                    cuisine = restaurant.get("cuisine", "")
+                    header = restaurant.get("name", "")
+                    if price:
+                        header += f" {price}"
+                    st.markdown(f"**{header}**")
+                    if cuisine:
+                        st.caption(f"🍴 {cuisine}")
+                    if restaurant.get("neighborhood"):
+                        st.caption(f"📍 {restaurant['neighborhood']}")
+                    if restaurant.get("description"):
+                        st.write(restaurant["description"])
+                    if restaurant.get("notes"):
+                        st.caption(restaurant["notes"])
+
     alts = data.get("alternatives", [])
     if alts:
         st.subheader("🔄 Alternatives")

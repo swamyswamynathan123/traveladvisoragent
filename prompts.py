@@ -83,10 +83,11 @@ Instructions:
 4. For dining activities: use specific restaurant names from the search results (e.g., "Dinner at Teresa Carles"). If no restaurant names appear in search results, set the activity to "Find a [cuisine] restaurant near [neighborhood]" and leave notes empty — NEVER write sentences like "no specific details available", "verify before traveling", or "based on general knowledge" in dining blocks. Do not explain the lack of data; just use the "Find a..." format.
 5. Include at least one rainy-day alternative under "alternatives".
 6. Populate "hotel_suggestions" with 2-3 hotels per city. Use hotel names from search results when available; otherwise use training knowledge and mark the notes field as "[General knowledge — verify availability before booking]". Each suggestion must include name, city, neighborhood (if known), budget_level (budget/mid_range/luxury), and a 1-sentence description.
-7. logistics_notes must cover: transport between days, booking lead times, rough budget guidance.
-8. List every assumption you made in "assumptions".
-9. List unresolved open questions in "open_questions" (e.g., unknown hotel area preference).
-10. Populate "sources" from the Tavily results you actually referenced."""
+7. Populate "restaurant_suggestions" with 2-3 restaurants per city that match the traveler's cuisine preferences and dietary constraints. Use restaurant names from search results when available; otherwise use training knowledge and mark notes as "[General knowledge — verify current status before visiting]". Each suggestion must include name, city, cuisine, price_range ($ / $$ / $$$), and a 1-sentence description.
+8. logistics_notes must cover: transport between days, booking lead times, rough budget guidance.
+9. List every assumption you made in "assumptions".
+10. List unresolved open questions in "open_questions" (e.g., unknown hotel area preference).
+11. Populate "sources" from the Tavily results you actually referenced."""
 
 
 QUESTION_ANSWER_PROMPT = """\

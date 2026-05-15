@@ -83,12 +83,23 @@ class HotelSuggestion(BaseModel):
     notes: Optional[str] = None
 
 
+class RestaurantSuggestion(BaseModel):
+    name: str
+    city: str
+    neighborhood: Optional[str] = None
+    cuisine: Optional[str] = None
+    price_range: Optional[str] = None
+    description: Optional[str] = None
+    notes: Optional[str] = None
+
+
 class ItineraryResponse(BaseModel):
     destination: str
     duration: str
     traveler_type: Optional[str] = None
     itinerary: List[DayPlan]
     hotel_suggestions: List[HotelSuggestion] = Field(default_factory=list)
+    restaurant_suggestions: List[RestaurantSuggestion] = Field(default_factory=list)
     alternatives: List[AlternativePlan] = Field(default_factory=list)
     logistics_notes: str
     assumptions: List[str] = Field(default_factory=list)
