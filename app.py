@@ -1,0 +1,329 @@
+from __future__ import annotations
+import logging
+
+import streamlit as st
+from dotenv import load_dotenv
+
+from graph import build_graph, build_initial_state
+
+load_dotenv()
+logging.basicConfig(level=logging.INFO)
+
+st.set_page_config(
+    page_title="Travel Advisor Agent",
+    page_icon="✈️",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+# ── session state bootstrap ───────────────────────────────────────────────────
+
+if "agent_state" not in st.session_state:
+    st.session_state.agent_state = build_initial_state()
+if "compiled_graph" not in st.session_state:
+    st.session_state.compiled_graph = build_graph()
+if "show_refine_input" not in st.session_state:
+    st.session_state.show_refine_input = False
+
+
+# ── rendering helpers ─────────────────────────────────────────────────────────
+
+def _render_itinerary(data: dict) -> None:
+    dest = data.get("destination", "")
+    dur = data.get("duration", "")
+    ttype = data.get("traveler_type", "")
+    header = f"🗺️ {dur} Itinerary for {dest}"
+    if ttype:
+        header += f" ({ttype})"
+    st.subheader(header)
+
+    for day in data.get("itinerary", []):
+        day_num = day.get("day_number", "?")
+        theme = day.get("theme", "")
+        label = f"Day {day_num}" + (f" — {theme}" if theme else "")
+        with st.expander(label, expanded=(day_num == 1)):
+            time_icons = {"morning": "🌅", "afternoon": "☀️", "evening": "🌙"}
+            for block in day.get("blocks", []):
+                tod = block.get("time_of_day", "")
+                icon = time_icons.get(tod, "⏰")
+                st.markdown(f"**{icon} {tod.capitalize()}**")
+                st.markdown(f"📍 {block.get('activity', '')}")
+                if block.get("location"):
+                    st.caption(f"Location: {block['location']}")
+                if block.get("notes"):
+                    st.info(block["notes"])
+                if block.get("duration_hours"):
+                    st.caption(f"~{block['duration_hours']} hr")
+                st.divider()
+            if day.get("tips"):
+                st.success(f"💡 Tip: {day['tips']}")
+
+    alts = data.get("alternatives", [])
+    if alts:
+        st.subheader("🔄 Alternatives")
+        for alt in alts:
+            with st.expander(f"Alternative: {alt.get('name', '')}"):
+                st.write(alt.get("description", ""))
+                for act in alt.get("activities", []):
+                    st.markdown(f"- {act}")
+
+    if data.get("logistics_notes"):
+        st.subheader("🚗 Logistics Notes")
+        st.markdown(data["logistics_notes"])
+
+    col1, col2 = st.columns(2)
+    with col1:
+        assumptions = data.get("assumptions", [])
+        if assumptions:
+            st.subheader("📝 Assumptions")
+            for a in assumptions:
+                st.markdown(f"- {a}")
+    with col2:
+        open_q = data.get("open_questions", [])
+        if open_q:
+            st.subheader("❓ Open Questions")
+            for q in open_q:
+                st.markdown(f"- {q}")
+
+    sources = data.get("sources", [])
+    if sources:
+        st.subheader("📚 Sources")
+        for s in sources:
+            title = s.get("title", "Source")
+            url = s.get("url", "#")
+            snippet = s.get("snippet", "")
+            st.markdown(f"[{title}]({url})")
+            if snippet:
+                st.caption(snippet)
+
+
+def _render_answer(data: dict) -> None:
+    st.subheader("💬 Travel Answer")
+    st.write(data.get("answer", ""))
+
+    pts = data.get("supporting_points", [])
+    if pts:
+        st.subheader("📋 Key Points")
+        for p in pts:
+            st.markdown(f"- {p}")
+
+    assumptions = data.get("assumptions", [])
+    if assumptions:
+        with st.expander("📝 Assumptions & Caveats"):
+            for a in assumptions:
+                st.markdown(f"- {a}")
+
+    follow_ups = data.get("follow_up_questions", [])
+    if follow_ups:
+        st.subheader("🔮 Suggested Follow-ups")
+        for q in follow_ups:
+            st.markdown(f"- {q}")
+
+    sources = data.get("sources", [])
+    if sources:
+        st.subheader("📚 Sources")
+        for s in sources:
+            st.markdown(f"[{s.get('title', 'Source')}]({s.get('url', '#')})")
+            if s.get("snippet"):
+                st.caption(s["snippet"])
+
+
+def _render_clarification(data: dict) -> None:
+    st.info(data.get("message", ""))
+    missing = data.get("missing_fields", [])
+    if missing:
+        st.write("**Missing information:**", ", ".join(missing))
+    for q in data.get("open_questions", []):
+        st.markdown(f"- {q}")
+
+
+def _run_graph(state: dict) -> dict:
+    with st.spinner("🤔 Thinking..."):
+        return st.session_state.compiled_graph.invoke(state)
+
+
+# ── sidebar ───────────────────────────────────────────────────────────────────
+
+with st.sidebar:
+    st.title("✈️ Travel Advisor")
+    st.markdown("Plan trips and answer travel questions using AI + real-time web search.")
+    st.divider()
+
+    st.subheader("Trip Details")
+
+    destination = st.text_input(
+        "Destination(s) *",
+        placeholder="e.g., Paris  |  Tokyo + Kyoto",
+        help="Required for itinerary generation.",
+    )
+    col_d, col_s = st.columns(2)
+    with col_d:
+        duration_days = st.number_input("Duration (days)", min_value=1, max_value=60, value=5, step=1)
+    with col_s:
+        start_date = st.date_input("Start Date (opt.)")
+
+    origin = st.text_input("Departing From (opt.)", placeholder="e.g., London")
+
+    interests = st.multiselect(
+        "Interests",
+        [
+            "Culture & History",
+            "Food & Dining",
+            "Nature & Outdoors",
+            "Adventure Sports",
+            "Art & Museums",
+            "Shopping",
+            "Nightlife",
+            "Family-Friendly",
+            "Wellness & Spa",
+        ],
+    )
+
+    budget_level = st.select_slider(
+        "Budget Level",
+        options=["budget", "mid_range", "luxury"],
+        value="mid_range",
+    )
+    pace = st.select_slider(
+        "Travel Pace",
+        options=["relaxed", "moderate", "packed"],
+        value="moderate",
+    )
+    traveler_type = st.selectbox(
+        "Traveler Type",
+        ["solo", "couple", "family", "group"],
+    )
+    constraints_raw = st.text_area(
+        "Special Constraints (opt.)",
+        placeholder="e.g., wheelchair accessible, vegetarian only, no flying",
+    )
+
+    st.divider()
+
+    btn_col1, btn_col2 = st.columns(2)
+    with btn_col1:
+        generate_clicked = st.button("🗓️ Generate Itinerary", type="primary", use_container_width=True)
+    with btn_col2:
+        refine_clicked = st.button("✏️ Refine Plan", use_container_width=True)
+
+    ask_q_clicked = st.button("❓ Ask a Travel Question", use_container_width=True)
+
+    if st.button("🔄 Reset", use_container_width=True):
+        st.session_state.agent_state = build_initial_state()
+        st.session_state.show_refine_input = False
+        st.rerun()
+
+# ── generate itinerary ────────────────────────────────────────────────────────
+
+if generate_clicked:
+    if not destination.strip():
+        st.sidebar.error("Please enter a destination.")
+    else:
+        constraints = [c.strip() for c in constraints_raw.split(",") if c.strip()]
+        normalized_interests = [
+            i.lower().replace(" & ", "_").replace(" ", "_") for i in interests
+        ]
+
+        new_state = build_initial_state()
+        new_state["user_profile"] = {"traveler_type": traveler_type}
+        new_state["intent"] = "planning"
+        new_state["trip_request"] = {
+            "destination": destination.strip(),
+            "duration_days": int(duration_days),
+            "start_date": str(start_date) if start_date else None,
+            "origin": origin.strip() or None,
+            "interests": normalized_interests,
+            "budget_level": budget_level,
+            "pace": pace,
+            "constraints": constraints,
+        }
+        new_state["collected_info"] = {
+            "has_destination": True,
+            "has_duration": True,
+            "has_dates": bool(start_date),
+            "has_interests": bool(interests),
+            "has_budget": True,
+            "is_complete_for_planning": True,
+        }
+        user_msg = (
+            f"Plan a {duration_days}-day trip to {destination.strip()}. "
+            f"Traveler type: {traveler_type}. Budget: {budget_level}. Pace: {pace}. "
+            f"Interests: {', '.join(interests) or 'general sightseeing'}. "
+            f"Constraints: {', '.join(constraints) or 'none'}."
+        )
+        if origin:
+            user_msg += f" Departing from {origin}."
+        if start_date:
+            user_msg += f" Start date: {start_date}."
+        new_state["messages"] = [{"role": "user", "content": user_msg}]
+
+        result_state = _run_graph(new_state)
+        st.session_state.agent_state = result_state
+        st.rerun()
+
+# ── refine plan ───────────────────────────────────────────────────────────────
+
+if refine_clicked:
+    st.session_state.show_refine_input = True
+
+if st.session_state.show_refine_input:
+    refine_text = st.sidebar.text_area(
+        "What would you like to change?",
+        placeholder="e.g., Add more food experiences on day 2",
+    )
+    if st.sidebar.button("Submit Refinement", type="primary"):
+        if refine_text.strip():
+            state = dict(st.session_state.agent_state)
+            msgs = list(state.get("messages", []))
+            msgs.append({"role": "user", "content": refine_text.strip()})
+            state["messages"] = msgs
+            state["tavily_context"] = []
+            state["tool_call_count"] = 0
+            state["final_response"] = None
+            state["needs_clarification"] = False
+            result_state = _run_graph(state)
+            st.session_state.agent_state = result_state
+            st.session_state.show_refine_input = False
+            st.rerun()
+
+# ── main area ─────────────────────────────────────────────────────────────────
+
+st.title("Travel Advisor Agent ✈️")
+st.caption("Powered by OpenAI + Tavily real-time web search + LangGraph")
+
+agent_state = st.session_state.agent_state
+messages = agent_state.get("messages", [])
+final_response = agent_state.get("final_response")
+
+# Chat history
+for msg in messages:
+    role = msg.get("role", "user")
+    content = msg.get("content", "")
+    with st.chat_message(role):
+        st.write(content)
+
+# Render structured response below chat
+if final_response:
+    resp_type = final_response.get("type")
+    data = final_response.get("data", {})
+    st.divider()
+    if resp_type == "itinerary":
+        _render_itinerary(data)
+    elif resp_type == "answer":
+        _render_answer(data)
+    elif resp_type == "clarification":
+        _render_clarification(data)
+
+# Chat input for follow-up Q&A
+if prompt := st.chat_input("Ask a follow-up or travel question..."):
+    state = dict(st.session_state.agent_state)
+    msgs = list(state.get("messages", []))
+    msgs.append({"role": "user", "content": prompt})
+    state["messages"] = msgs
+    state["tavily_context"] = []
+    state["tool_call_count"] = 0
+    state["final_response"] = None
+    state["needs_clarification"] = False
+    result_state = _run_graph(state)
+    st.session_state.agent_state = result_state
+    st.rerun()
