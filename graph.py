@@ -215,7 +215,13 @@ def search_with_tavily_node(state: dict) -> dict:
             queries.append(f"{dest} best restaurants must-try food")
     elif intent == "question":
         q = (state.get("travel_question") or {}).get("question", "")
-        queries = [q]
+        trip_req = state.get("trip_request") or {}
+        dest = trip_req.get("destination", "")
+        start_date = trip_req.get("start_date", "")
+        enriched_q = f"{q} {dest}".strip() if dest and dest.lower() not in q.lower() else q
+        queries = [enriched_q]
+        if start_date and dest:
+            queries.append(f"{dest} weather {start_date}")
     else:
         return state
 
@@ -285,9 +291,20 @@ def _generate_answer(state: dict) -> dict:
     llm = _llm(model="gpt-4o", temperature=0.3)
     schema_str = json.dumps(QuestionResponse.model_json_schema(), indent=2)
     q_data = state.get("travel_question") or {}
+    trip_req = state.get("trip_request") or {}
+    trip_context_parts = []
+    if trip_req.get("destination"):
+        trip_context_parts.append(f"Destination: {trip_req['destination']}")
+    if trip_req.get("start_date"):
+        trip_context_parts.append(f"Travel date: {trip_req['start_date']}")
+    elif trip_req.get("duration_days"):
+        trip_context_parts.append(f"Duration: {trip_req['duration_days']} days")
+    if trip_req.get("constraints"):
+        trip_context_parts.append(f"Constraints: {', '.join(str(c) for c in trip_req['constraints'])}")
+    trip_context = "; ".join(trip_context_parts) if trip_context_parts else q_data.get("context") or "No additional context."
     prompt = QUESTION_ANSWER_PROMPT.format(
         question=q_data.get("question", ""),
-        context=q_data.get("context") or "No additional context.",
+        context=trip_context,
         tavily_context=_format_tavily_context(state.get("tavily_context", [])),
         schema=schema_str,
     )
