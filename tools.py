@@ -61,10 +61,19 @@ def tavily_search(
         )
 
 
+def tavily_search_advanced(
+    query: str,
+    max_results: int = 5,
+) -> TavilySearchOutput:
+    """Tavily search with advanced depth — deeper content extraction from page bodies."""
+    return tavily_search(query=query, search_depth="advanced", max_results=max_results)
+
+
 def tripadvisor_search(
     query: str,
     max_results: int = 5,
 ) -> TavilySearchOutput:
-    """Search for rated venues using TripAdvisor-biased queries via Tavily advanced mode."""
+    """Search for rated attractions using TripAdvisor-biased queries via Tavily advanced mode.
+    Use for attractions/hotels only — not restaurants (TripAdvisor restaurant pages are JS-rendered)."""
     targeted_query = f"{query} tripadvisor"
     return tavily_search(query=targeted_query, search_depth="advanced", max_results=max_results)
