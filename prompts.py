@@ -78,11 +78,12 @@ Instructions:
 1. Build morning/afternoon/evening blocks for every day.
 2. Only cite specific facts (hours, prices, neighborhoods) if they appear in the search results above.
 3. For any claim not in search results, add "[General knowledge]" to the notes field.
-4. Include at least one rainy-day alternative under "alternatives".
-5. logistics_notes must cover: transport between days, booking lead times, rough budget guidance.
-6. List every assumption you made in "assumptions".
-7. List unresolved open questions in "open_questions" (e.g., unknown hotel area preference).
-8. Populate "sources" from the Tavily results you actually referenced."""
+4. For dining activities: use specific restaurant names from the search results (e.g., "Dinner at Teresa Carles" not "Dinner at a vegetarian restaurant"). If no restaurant names appear in search results, set the activity to "Find a [cuisine] restaurant near [neighborhood]" so the traveler knows to search — never use vague placeholders like "a recommended restaurant".
+5. Include at least one rainy-day alternative under "alternatives".
+6. logistics_notes must cover: transport between days, booking lead times, rough budget guidance.
+7. List every assumption you made in "assumptions".
+8. List unresolved open questions in "open_questions" (e.g., unknown hotel area preference).
+9. Populate "sources" from the Tavily results you actually referenced."""
 
 
 QUESTION_ANSWER_PROMPT = """\

@@ -179,6 +179,9 @@ def search_with_tavily_node(state: dict) -> dict:
         trip_req = state.get("trip_request") or {}
         dest = trip_req.get("destination", "")
         interests = trip_req.get("interests", [])
+        constraints = [str(c).lower() for c in trip_req.get("constraints", [])]
+        constraint_text = " ".join(constraints)
+
         queries = [
             f"{dest} top attractions things to do",
             f"{dest} travel tips transportation budget",
@@ -186,6 +189,16 @@ def search_with_tavily_node(state: dict) -> dict:
         if interests:
             interests_str = " ".join(str(i) for i in interests[:2])
             queries.append(f"{dest} {interests_str} recommendations")
+
+        # Add a targeted restaurant search when dietary constraints or food interests exist
+        dietary_keywords = ["vegetarian", "vegan", "halal", "kosher", "gluten", "dairy-free"]
+        has_dietary = any(kw in constraint_text for kw in dietary_keywords)
+        has_food_interest = any("food" in str(i).lower() or "dining" in str(i).lower() for i in interests)
+        if has_dietary:
+            diet_type = next((kw for kw in dietary_keywords if kw in constraint_text), "special diet")
+            queries.append(f"{dest} best {diet_type} restaurants recommended")
+        elif has_food_interest:
+            queries.append(f"{dest} best restaurants must-try food")
     elif intent == "question":
         q = (state.get("travel_question") or {}).get("question", "")
         queries = [q]
