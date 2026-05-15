@@ -80,7 +80,7 @@ Instructions:
 1. Build morning/afternoon/evening blocks for every day.
 2. Only cite specific facts (hours, prices, neighborhoods) if they appear in the search results above.
 3. For any claim not in search results, add "[General knowledge]" to the notes field.
-4. For dining activities: use specific restaurant names from the search results (e.g., "Dinner at Teresa Carles" not "Dinner at a vegetarian restaurant"). If no restaurant names appear in search results, set the activity to "Find a [cuisine] restaurant near [neighborhood]" so the traveler knows to search — never use vague placeholders like "a recommended restaurant".
+4. For dining activities: use specific restaurant names from the search results (e.g., "Dinner at Teresa Carles"). If no restaurant names appear in search results, set the activity to "Find a [cuisine] restaurant near [neighborhood]" and leave notes empty — NEVER write sentences like "no specific details available", "verify before traveling", or "based on general knowledge" in dining blocks. Do not explain the lack of data; just use the "Find a..." format.
 5. Include at least one rainy-day alternative under "alternatives".
 6. logistics_notes must cover: transport between days, booking lead times, rough budget guidance.
 7. List every assumption you made in "assumptions".

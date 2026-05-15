@@ -204,15 +204,21 @@ def search_with_tavily_node(state: dict) -> dict:
             interests_str = " ".join(str(i) for i in interests[:2])
             queries.append(f"{dest} {interests_str} recommendations")
 
-        # Add a targeted restaurant search when dietary constraints or food interests exist
+        # Add targeted restaurant searches; for multi-city trips search each city individually
         dietary_keywords = ["vegetarian", "vegan", "halal", "kosher", "gluten", "dairy-free"]
         has_dietary = any(kw in constraint_text for kw in dietary_keywords)
         has_food_interest = any("food" in str(i).lower() or "dining" in str(i).lower() for i in interests)
-        if has_dietary:
-            diet_type = next((kw for kw in dietary_keywords if kw in constraint_text), "special diet")
-            queries.append(f"{dest} best {diet_type} restaurants recommended")
-        elif has_food_interest:
-            queries.append(f"{dest} best restaurants must-try food")
+        if has_dietary or has_food_interest:
+            import re
+            city_names = [c.strip() for c in re.split(r"[,+&]|\band\b", dest, flags=re.IGNORECASE) if c.strip()]
+            search_cities = city_names[:2] if len(city_names) > 1 else [dest]
+            if has_dietary:
+                diet_type = next((kw for kw in dietary_keywords if kw in constraint_text), "special diet")
+                for city in search_cities:
+                    queries.append(f"{city} best {diet_type} restaurants recommended")
+            else:
+                for city in search_cities:
+                    queries.append(f"{city} best restaurants must-try food")
     elif intent == "question":
         q = (state.get("travel_question") or {}).get("question", "")
         trip_req = state.get("trip_request") or {}
