@@ -226,6 +226,16 @@ def search_with_tavily_node(state: dict) -> dict:
                     tavily_search_advanced,
                 ))
 
+        # Hotel searches — one per city, tripadvisor is reliable for hotel pages
+        budget_level = trip_req.get("budget_level", "mid_range")
+        city_names = [c.strip() for c in re.split(r"[,+&]|\band\b", dest, flags=re.IGNORECASE) if c.strip()]
+        hotel_cities = city_names if city_names else [dest]
+        for city in hotel_cities[:3]:
+            search_tasks.append((
+                f"best {budget_level.replace('_', ' ')} hotels {city} recommended 2024",
+                tripadvisor_search,
+            ))
+
     elif intent == "question":
         q = (state.get("travel_question") or {}).get("question", "")
         trip_req = state.get("trip_request") or {}

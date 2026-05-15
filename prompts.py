@@ -82,10 +82,11 @@ Instructions:
 3. Only add "[General knowledge]" at the end of the notes sentence when citing specific operational facts (admission prices, opening hours, booking links) that do NOT appear in the search results. Do not add the marker to descriptive sentences about the attraction itself.
 4. For dining activities: use specific restaurant names from the search results (e.g., "Dinner at Teresa Carles"). If no restaurant names appear in search results, set the activity to "Find a [cuisine] restaurant near [neighborhood]" and leave notes empty — NEVER write sentences like "no specific details available", "verify before traveling", or "based on general knowledge" in dining blocks. Do not explain the lack of data; just use the "Find a..." format.
 5. Include at least one rainy-day alternative under "alternatives".
-6. logistics_notes must cover: transport between days, booking lead times, rough budget guidance.
-7. List every assumption you made in "assumptions".
-8. List unresolved open questions in "open_questions" (e.g., unknown hotel area preference).
-9. Populate "sources" from the Tavily results you actually referenced."""
+6. Populate "hotel_suggestions" with 2-3 hotels per city. Use hotel names from search results when available; otherwise use training knowledge and mark the notes field as "[General knowledge — verify availability before booking]". Each suggestion must include name, city, neighborhood (if known), budget_level (budget/mid_range/luxury), and a 1-sentence description.
+7. logistics_notes must cover: transport between days, booking lead times, rough budget guidance.
+8. List every assumption you made in "assumptions".
+9. List unresolved open questions in "open_questions" (e.g., unknown hotel area preference).
+10. Populate "sources" from the Tavily results you actually referenced."""
 
 
 QUESTION_ANSWER_PROMPT = """\

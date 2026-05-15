@@ -74,11 +74,21 @@ class AlternativePlan(BaseModel):
     activities: List[str] = Field(default_factory=list)
 
 
+class HotelSuggestion(BaseModel):
+    name: str
+    city: str
+    neighborhood: Optional[str] = None
+    budget_level: Optional[str] = None
+    description: Optional[str] = None
+    notes: Optional[str] = None
+
+
 class ItineraryResponse(BaseModel):
     destination: str
     duration: str
     traveler_type: Optional[str] = None
     itinerary: List[DayPlan]
+    hotel_suggestions: List[HotelSuggestion] = Field(default_factory=list)
     alternatives: List[AlternativePlan] = Field(default_factory=list)
     logistics_notes: str
     assumptions: List[str] = Field(default_factory=list)

@@ -65,6 +65,28 @@ def _render_itinerary(data: dict) -> None:
             if day.get("tips"):
                 st.success(f"💡 Tip: {day['tips']}")
 
+    hotels = data.get("hotel_suggestions", [])
+    if hotels:
+        st.subheader("🏨 Hotel Suggestions")
+        by_city: dict = {}
+        for h in hotels:
+            by_city.setdefault(h.get("city", "General"), []).append(h)
+        for city, city_hotels in by_city.items():
+            st.markdown(f"**{city}**")
+            cols = st.columns(min(len(city_hotels), 3))
+            for col, hotel in zip(cols, city_hotels):
+                with col:
+                    budget_icons = {"budget": "💰", "mid_range": "💰💰", "luxury": "💰💰💰"}
+                    budget = hotel.get("budget_level", "")
+                    icon = budget_icons.get(budget, "")
+                    st.markdown(f"**{hotel.get('name', '')}** {icon}")
+                    if hotel.get("neighborhood"):
+                        st.caption(f"📍 {hotel['neighborhood']}")
+                    if hotel.get("description"):
+                        st.write(hotel["description"])
+                    if hotel.get("notes"):
+                        st.caption(hotel["notes"])
+
     alts = data.get("alternatives", [])
     if alts:
         st.subheader("🔄 Alternatives")
