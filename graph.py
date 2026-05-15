@@ -35,6 +35,7 @@ def build_initial_state() -> dict:
         "tavily_context": [],
         "draft": None,
         "final_response": None,
+        "itinerary_response": None,   # persists across Q&A queries
         "tool_call_count": 0,
         "needs_clarification": False,
         "clarification_questions": [],
@@ -331,10 +332,12 @@ def _generate_itinerary(state: dict) -> dict:
         response: ItineraryResponse = structured_llm.invoke(
             [SystemMessage(content=SYSTEM_PROMPT), HumanMessage(content=prompt)]
         )
+        itinerary = {"type": "itinerary", "data": response.model_dump()}
         return {
             **state,
             "draft": response.model_dump_json(),
-            "final_response": {"type": "itinerary", "data": response.model_dump()},
+            "final_response": itinerary,
+            "itinerary_response": itinerary,
         }
     except Exception as exc:
         logger.warning("Itinerary generation failed (%s), retrying with repair", exc)
@@ -386,10 +389,9 @@ def _retry_with_repair(llm, state: dict, resp_type: str, schema_cls, schema_str:
     try:
         structured_llm = llm.with_structured_output(schema_cls)
         response = structured_llm.invoke([HumanMessage(content=repair_prompt)])
-        return {
-            **state,
-            "final_response": {"type": resp_type, "data": response.model_dump()},
-        }
+        response_payload = {"type": resp_type, "data": response.model_dump()}
+        extra = {"itinerary_response": response_payload} if resp_type == "itinerary" else {}
+        return {**state, "final_response": response_payload, **extra}
     except Exception as exc2:
         logger.error("Repair also failed: %s", exc2)
         fallback = ClarificationResponse(

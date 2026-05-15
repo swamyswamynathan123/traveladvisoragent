@@ -353,6 +353,7 @@ st.caption("Powered by OpenAI + Tavily real-time web search + LangGraph")
 agent_state = st.session_state.agent_state
 messages = agent_state.get("messages", [])
 final_response = agent_state.get("final_response")
+itinerary_response = agent_state.get("itinerary_response")
 
 # Chat history
 for msg in messages:
@@ -361,14 +362,17 @@ for msg in messages:
     with st.chat_message(role):
         st.write(content)
 
-# Render structured response below chat
-if final_response:
+# Always show the itinerary if one has been generated
+if itinerary_response:
+    st.divider()
+    _render_itinerary(itinerary_response.get("data", {}))
+
+# Show the latest Q&A answer or clarification below the itinerary
+if final_response and final_response.get("type") != "itinerary":
     resp_type = final_response.get("type")
     data = final_response.get("data", {})
     st.divider()
-    if resp_type == "itinerary":
-        _render_itinerary(data)
-    elif resp_type == "answer":
+    if resp_type == "answer":
         _render_answer(data)
     elif resp_type == "clarification":
         _render_clarification(data)
