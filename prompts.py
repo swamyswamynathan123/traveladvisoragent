@@ -78,8 +78,8 @@ Generate a complete itinerary. Return ONLY valid JSON matching this schema exact
 
 Instructions:
 1. Build morning/afternoon/evening blocks for every day.
-2. Only cite specific facts (hours, prices, neighborhoods) if they appear in the search results above.
-3. For any claim not in search results, add "[General knowledge]" to the notes field.
+2. For every activity block, always write 1-2 sentences in the notes field describing what the attraction is and why it is worth visiting. Never leave notes empty for sightseeing or cultural activities.
+3. Only add "[General knowledge]" at the end of the notes sentence when citing specific operational facts (admission prices, opening hours, booking links) that do NOT appear in the search results. Do not add the marker to descriptive sentences about the attraction itself.
 4. For dining activities: use specific restaurant names from the search results (e.g., "Dinner at Teresa Carles"). If no restaurant names appear in search results, set the activity to "Find a [cuisine] restaurant near [neighborhood]" and leave notes empty — NEVER write sentences like "no specific details available", "verify before traveling", or "based on general knowledge" in dining blocks. Do not explain the lack of data; just use the "Find a..." format.
 5. Include at least one rainy-day alternative under "alternatives".
 6. logistics_notes must cover: transport between days, booking lead times, rough budget guidance.

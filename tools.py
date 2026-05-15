@@ -43,7 +43,7 @@ def tavily_search(
             TavilyResult(
                 title=item.get("title", ""),
                 url=item.get("url", ""),
-                content_snippet=item.get("content", "")[:500],
+                content_snippet=item.get("content", "")[:1000],
                 source_type=item.get("type", "web"),
             )
             for item in raw.get("results", [])
@@ -65,6 +65,6 @@ def tripadvisor_search(
     query: str,
     max_results: int = 5,
 ) -> TavilySearchOutput:
-    """Search TripAdvisor via Tavily (site:tripadvisor.com) for ratings and reviews."""
-    targeted_query = f"site:tripadvisor.com {query}"
-    return tavily_search(query=targeted_query, search_depth="basic", max_results=max_results)
+    """Search for rated venues using TripAdvisor-biased queries via Tavily advanced mode."""
+    targeted_query = f"{query} tripadvisor"
+    return tavily_search(query=targeted_query, search_depth="advanced", max_results=max_results)

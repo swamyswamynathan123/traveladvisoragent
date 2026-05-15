@@ -218,10 +218,10 @@ def search_with_tavily_node(state: dict) -> dict:
             if has_dietary:
                 diet_type = next((kw for kw in dietary_keywords if kw in constraint_text), "special diet")
                 for city in search_cities:
-                    search_tasks.append((f"{city} best {diet_type} restaurants", tripadvisor_search))
+                    search_tasks.append((f"top {diet_type} restaurants {city} list names 2024", tripadvisor_search))
             else:
                 for city in search_cities:
-                    search_tasks.append((f"{city} best restaurants must-try food", tripadvisor_search))
+                    search_tasks.append((f"best restaurants {city} must-try list names 2024", tripadvisor_search))
 
     elif intent == "question":
         q = (state.get("travel_question") or {}).get("question", "")
@@ -240,7 +240,7 @@ def search_with_tavily_node(state: dict) -> dict:
             city_names = [c.strip() for c in re.split(r"[,+&]|\band\b", dest, flags=re.IGNORECASE) if c.strip()]
             for city in city_names[:2]:
                 if city.lower() not in q.lower():
-                    search_tasks.append((f"{q} {city}", tripadvisor_search))
+                    search_tasks.append((f"{q} {city} list names 2024", tripadvisor_search))
         elif start_date and dest:
             search_tasks.append((f"{dest} weather {start_date}", tavily_search))
 
