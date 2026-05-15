@@ -34,6 +34,7 @@ class TripRequest(BaseModel):
     duration_days: Optional[int] = None
     start_date: Optional[str] = None
     origin: Optional[str] = None
+    returning_to: Optional[str] = None
     interests: List[str] = Field(default_factory=list)
     budget_level: BudgetLevel = BudgetLevel.mid_range
     pace: Pace = Pace.moderate

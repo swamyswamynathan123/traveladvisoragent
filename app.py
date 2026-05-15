@@ -163,6 +163,7 @@ with st.sidebar:
         start_date = st.date_input("Start Date (opt.)")
 
     origin = st.text_input("Departing From (opt.)", placeholder="e.g., London")
+    returning_to = st.text_input("Returning To (opt.)", placeholder="e.g., London")
 
     interests = st.multiselect(
         "Interests",
@@ -232,6 +233,7 @@ if generate_clicked:
             "duration_days": int(duration_days),
             "start_date": str(start_date) if start_date else None,
             "origin": origin.strip() or None,
+            "returning_to": returning_to.strip() or None,
             "interests": normalized_interests,
             "budget_level": budget_level,
             "pace": pace,
@@ -253,6 +255,8 @@ if generate_clicked:
         )
         if origin:
             user_msg += f" Departing from {origin}."
+        if returning_to:
+            user_msg += f" Returning to {returning_to}."
         if start_date:
             user_msg += f" Start date: {start_date}."
         new_state["messages"] = [{"role": "user", "content": user_msg}]
