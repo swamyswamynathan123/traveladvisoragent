@@ -220,13 +220,22 @@ def search_with_tavily_node(state: dict) -> dict:
                 for city in search_cities:
                     queries.append(f"{city} best restaurants must-try food")
     elif intent == "question":
+        import re
         q = (state.get("travel_question") or {}).get("question", "")
         trip_req = state.get("trip_request") or {}
         dest = trip_req.get("destination", "")
         start_date = trip_req.get("start_date", "")
         enriched_q = f"{q} {dest}".strip() if dest and dest.lower() not in q.lower() else q
         queries = [enriched_q]
-        if start_date and dest:
+        # For restaurant/food questions on multi-city trips, search each city individually
+        restaurant_kw = ["restaurant", "eat", "food", "dining", "vegetarian", "vegan",
+                         "halal", "kosher", "cafe", "cuisine", "where to eat"]
+        if dest and any(kw in q.lower() for kw in restaurant_kw):
+            city_names = [c.strip() for c in re.split(r"[,+&]|\band\b", dest, flags=re.IGNORECASE) if c.strip()]
+            for city in city_names[:2]:
+                if city.lower() not in q.lower():
+                    queries.append(f"{q} {city}")
+        elif start_date and dest:
             queries.append(f"{dest} weather {start_date}")
     else:
         return state

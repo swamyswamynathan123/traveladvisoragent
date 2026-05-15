@@ -101,12 +101,13 @@ Return ONLY valid JSON matching this schema exactly:
 {schema}
 
 Instructions:
-1. Give a direct, clear answer.
+1. Give a direct, clear answer using only information present in the search results above.
 2. List supporting evidence from search results as bullet points in supporting_points.
 3. Note any assumptions or uncertainty in assumptions.
 4. Suggest 1-3 useful follow-up questions in follow_up_questions.
 5. Populate sources from the Tavily results you actually cited.
-6. If search results are empty, answer from general knowledge and note it in assumptions."""
+6. If search results contain specific names (restaurants, hotels, attractions), list them by name in the answer. NEVER write "several restaurants can be found" or similar vague phrases — either name them or say none were found in search results.
+7. If search results are empty or lack specific names, say exactly that in the answer (e.g., "The search results did not return specific restaurant names. Use Google Maps or TripAdvisor to find [type] restaurants in [city].") and note it in assumptions. Do NOT invent names or write hedging paragraphs."""
 
 
 SCHEMA_REPAIR_PROMPT = """\
