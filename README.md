@@ -1,3 +1,4 @@
+
 # Travel Advisor Agent
 
 A multi-step AI travel planning agent built with LangGraph, OpenAI, Tavily, and Streamlit.
@@ -39,8 +40,8 @@ traveladvisoragent/
 ├── tools.py         # Tavily search wrapper
 ├── schemas.py       # Pydantic models for all state and response types
 ├── prompts.py       # LLM prompt templates for each node
-├── requirements.txt
-├── .env.example
+├── requirements.txt # Pinned dependencies
+├── .env.example     # Environment variable template
 └── tests/
     ├── test_schemas.py
     ├── test_tools.py
@@ -49,17 +50,48 @@ traveladvisoragent/
 
 ## Setup
 
-### 1. Install dependencies
+### Prerequisites
+
+- Python 3.11+
+- An [OpenAI API key](https://platform.openai.com/api-keys)
+- A [Tavily API key](https://app.tavily.com)
+
+### 1. Create and activate the virtual environment
+
+**macOS / Linux:**
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+**Windows (PowerShell):**
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+```
+
+**Windows (Command Prompt):**
+```cmd
+python -m venv .venv
+.venv\Scripts\activate.bat
+```
+
+### 2. Install dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2. Configure API keys
+### 3. Configure API keys
 
+**macOS / Linux:**
 ```bash
-cp .env.example .env        # macOS/Linux
-copy .env.example .env      # Windows
+cp .env.example .env
+```
+
+**Windows:**
+```cmd
+copy .env.example .env
 ```
 
 Edit `.env` and fill in your keys:
@@ -69,10 +101,7 @@ OPENAI_API_KEY=sk-...
 TAVILY_API_KEY=tvly-...
 ```
 
-- OpenAI API key: https://platform.openai.com/api-keys
-- Tavily API key: https://app.tavily.com
-
-### 3. Run the app
+### 4. Run the app
 
 ```bash
 streamlit run app.py
@@ -98,6 +127,7 @@ Type any travel question directly in the chat input at the bottom of the page (e
 No API keys required — all external calls are mocked.
 
 ```bash
+# Make sure your virtual environment is active first
 pytest tests/ -v
 ```
 
