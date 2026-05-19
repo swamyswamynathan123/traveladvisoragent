@@ -137,8 +137,20 @@ def _render_itinerary(data: dict) -> None:
         open_q = data.get("open_questions", [])
         if open_q:
             st.subheader("❓ Open Questions")
-            for q in open_q:
-                st.markdown(f"- {q}")
+            for i, q in enumerate(open_q):
+                if st.button(f"💬 {q}", key=f"itinerary_openq_{i}"):
+                    state = dict(st.session_state.agent_state)
+                    msgs = list(state.get("messages", []))
+                    msgs.append({"role": "user", "content": q})
+                    state["messages"] = msgs
+                    state["intent"] = "unknown"
+                    state["tavily_context"] = []
+                    state["tool_call_count"] = 0
+                    state["final_response"] = None
+                    state["needs_clarification"] = False
+                    result_state = _run_graph(state)
+                    st.session_state.agent_state = result_state
+                    st.rerun()
 
     sources = data.get("sources", [])
     if sources:
@@ -171,8 +183,20 @@ def _render_answer(data: dict) -> None:
     follow_ups = data.get("follow_up_questions", [])
     if follow_ups:
         st.subheader("🔮 Suggested Follow-ups")
-        for q in follow_ups:
-            st.markdown(f"- {q}")
+        for i, q in enumerate(follow_ups):
+            if st.button(f"💬 {q}", key=f"answer_followup_{i}"):
+                state = dict(st.session_state.agent_state)
+                msgs = list(state.get("messages", []))
+                msgs.append({"role": "user", "content": q})
+                state["messages"] = msgs
+                state["intent"] = "unknown"
+                state["tavily_context"] = []
+                state["tool_call_count"] = 0
+                state["final_response"] = None
+                state["needs_clarification"] = False
+                result_state = _run_graph(state)
+                st.session_state.agent_state = result_state
+                st.rerun()
 
     sources = data.get("sources", [])
     if sources:
