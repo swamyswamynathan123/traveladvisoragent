@@ -96,6 +96,13 @@ logistics_notes must cover:
 • Which activities need advance booking and how far ahead (e.g. "Book Alhambra tickets 2–3 weeks ahead")
 • Rough daily spend estimate at {budget_level} level in local currency
 
+=== MULTI-CITY RULES (apply when destination contains 2+ cities) ===
+1. Cluster days by city — ALL days in the same city must be consecutive. Never split a city across non-consecutive days.
+2. Order cities geographically to minimise backtracking (e.g. Madrid → Seville → Barcelona, not Madrid → Barcelona → Seville → Madrid).
+3. Insert a dedicated travel day between each pair of cities. Use time_of_day "morning" for the departure block. The activity should name the exact transport: carrier, route, and journey time (e.g. "AVE high-speed train Madrid → Seville, Atocha station, ~2.5 hrs, book on Renfe.com"). Set notes to practical tips (book in advance, baggage, station location). Set duration_hours to the total door-to-door travel time.
+4. Allocate remaining days to each city proportionally to the total trip length (e.g. 8 days across 3 cities → roughly 2–3 days each, adjusted for distance and highlights).
+5. In logistics_notes, list the full inter-city transport sequence with estimated cost at {budget_level} tier.
+
 Generate a complete itinerary. Return ONLY valid JSON matching this schema exactly:
 {schema}
 
