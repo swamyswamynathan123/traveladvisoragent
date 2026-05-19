@@ -1,0 +1,84 @@
+<h2>Design — Section 2: Prompt Strategy</h2>
+<p class="subtitle">What changes in each prompt and why it fixes generic/shallow/impersonal responses</p>
+
+<div class="section">
+  <h3>Problem: Current ITINERARY_GENERATION_PROMPT</h3>
+  <div class="mockup">
+    <div class="mockup-body" style="font-size:12px;color:#aaa;font-family:monospace">
+      "Create a detailed day-by-day travel itinerary based on the information below.<br>
+      Trip Request: {trip_request}<br>
+      Traveler Profile: {user_profile}<br>
+      ..."
+      <br><br>
+      <span style="color:#e88">❌ No explicit personalization enforcement — model often ignores interests/budget/pace</span><br>
+      <span style="color:#e88">❌ Activities are named but no depth: "Visit the Louvre" with 1-sentence notes</span><br>
+      <span style="color:#e88">❌ No practical logistics per activity (how to get there, best arrival time, book in advance?)</span><br>
+      <span style="color:#e88">❌ Budget only used for hotels — not woven into activity choices or dining</span>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Fix: New ITINERARY_GENERATION_PROMPT structure</h3>
+  <div class="mockup">
+    <div class="mockup-body" style="font-size:12px;font-family:monospace;line-height:1.8">
+      <span style="color:#4caf50">STEP 1 — Personalization contract (new)</span><br>
+      "Before writing anything, confirm you will honor ALL of the following:<br>
+      &nbsp;• Budget: {budget_level} — every hotel, restaurant, and activity must match this tier<br>
+      &nbsp;• Pace: {pace} — {pace_description}<br>
+      &nbsp;• Interests: {interests} — at least 60% of activities must directly reflect these<br>
+      &nbsp;• Constraints: {constraints} — these are hard rules, never violate them"<br><br>
+
+      <span style="color:#4caf50">STEP 2 — Activity depth rules (strengthened)</span><br>
+      "For EVERY activity block:<br>
+      &nbsp;• Use the specific venue name (e.g. 'Mercado de San Miguel', not 'a local market')<br>
+      &nbsp;• Write 2–3 sentences: what it is, why it matches THIS traveler, one practical tip<br>
+      &nbsp;• Include: how to get there, how long to spend, best time to arrive, book-ahead flag"<br><br>
+
+      <span style="color:#4caf50">STEP 3 — Budget weaving (new)</span><br>
+      "budget-tier guidance injected per level:<br>
+      &nbsp;budget → free attractions, street food, hostels, public transit<br>
+      &nbsp;mid_range → paid attractions, sit-down restaurants $$, 3-star hotels<br>
+      &nbsp;luxury → skip queues, tasting menus, 4–5 star, private transfers"<br><br>
+
+      <span style="color:#4caf50">STEP 4 — Logistics block (strengthened)</span><br>
+      "logistics_notes must cover: exact transport between each day's areas,<br>
+      which activities need advance booking and how far ahead,<br>
+      rough daily spend estimate at the stated budget level"
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>New: PERSONALIZATION_CHECK_PROMPT (Claude Haiku, ~1s)</h3>
+  <div class="mockup">
+    <div class="mockup-body" style="font-size:12px;font-family:monospace;line-height:1.8">
+      "You are a quality reviewer for a travel itinerary.<br><br>
+      The traveler requested:<br>
+      &nbsp;• Interests: {interests}<br>
+      &nbsp;• Budget: {budget_level}<br>
+      &nbsp;• Pace: {pace} ({pace_description})<br>
+      &nbsp;• Constraints: {constraints}<br><br>
+      Review the itinerary below. For each day, check:<br>
+      1. Do activities reflect the stated interests? (flag mismatches)<br>
+      2. Are hotel/restaurant tiers consistent with budget_level?<br>
+      3. Does the number of activities per day match the stated pace?<br>
+      4. Are all constraints honored?<br><br>
+      Return the same itinerary JSON with violations fixed.<br>
+      Only change fields that violate the above — do not rewrite the whole plan."
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Fix: collect_requirements &amp; ask_clarification nodes</h3>
+  <div class="mockup">
+    <div class="mockup-body" style="font-size:12px;font-family:monospace">
+      <span style="color:#e88">Before: json.loads(response.content)  ← breaks silently if LLM adds a preamble</span><br><br>
+      <span style="color:#4caf50">After: llm.with_structured_output(IntentDetectionOutput)  ← Pydantic model enforced</span><br>
+      <span style="color:#4caf50">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;New schema: IntentDetectionOutput(intent, trip_request, travel_question, clarification_needed)</span>
+    </div>
+  </div>
+</div>
+
+<p style="margin-top:16px;font-size:13px;color:#aaa">Does this prompt strategy look right? Reply in terminal.</p>

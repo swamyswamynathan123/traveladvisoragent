@@ -1,0 +1,77 @@
+<h2>Design — Section 3: Parallel Search + Expedia + UI</h2>
+<p class="subtitle">Faster searches, real hotel data, and clickable follow-ups</p>
+
+<div class="section">
+  <h3>3a — Parallel Search (ThreadPoolExecutor)</h3>
+  <div class="split">
+    <div class="mockup">
+      <div class="mockup-header">Before (sequential ~8–10s)</div>
+      <div class="mockup-body" style="font-size:12px;font-family:monospace;line-height:2">
+        search("Paris top attractions") → wait<br>
+        search("Paris travel tips") → wait<br>
+        search("Paris food dining") → wait<br>
+        search("best hotels Paris") → wait<br>
+        search("best hotels Lyon") → wait<br>
+        <span style="color:#e88">Total: 5 × ~1.5s = ~8s before LLM even starts</span>
+      </div>
+    </div>
+    <div class="mockup">
+      <div class="mockup-header">After (parallel ~2–3s)</div>
+      <div class="mockup-body" style="font-size:12px;font-family:monospace;line-height:2">
+        ┌ search("Paris top attractions")<br>
+        ├ search("Paris travel tips")<br>
+        ├ search("Paris food dining")<br>
+        ├ search("best hotels Paris")<br>
+        └ search("best hotels Lyon")<br>
+        <span style="color:#4caf50">All 5 fire at once → done in ~2s</span>
+      </div>
+    </div>
+  </div>
+  <p style="font-size:12px;color:#aaa;margin-top:8px">Implementation: replace the <code>for query, search_fn in search_tasks</code> loop in <code>search_with_tavily_node</code> with <code>ThreadPoolExecutor.map()</code>. No architectural changes needed.</p>
+</div>
+
+<div class="section">
+  <h3>3b — Expedia MCP for Real Hotel Data</h3>
+  <div class="mockup">
+    <div class="mockup-body" style="font-size:12px;font-family:monospace;line-height:1.8">
+      <span style="color:#aaa">Current: Tavily scrapes TripAdvisor hotel pages → inconsistent, often just review summaries</span><br><br>
+      <span style="color:#4caf50">New: dedicated expedia_hotel_search() wrapper added to tools.py</span><br>
+      &nbsp;→ calls mcp__claude_ai_Expedia__search_hotels(destination, check_in, check_out, adults)<br>
+      &nbsp;→ returns real listings: name, star rating, price/night, neighborhood, amenities<br>
+      &nbsp;→ runs in parallel alongside Tavily searches (same ThreadPoolExecutor pool)<br>
+      &nbsp;→ results injected into hotel_context section of the itinerary prompt<br><br>
+      <span style="color:#ffb74d">⚠ Requires: destination has a check-in date set. Falls back to Tavily if no date provided.</span>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>3c — Clickable Follow-up Questions</h3>
+  <div class="split">
+    <div class="mockup">
+      <div class="mockup-header">Before</div>
+      <div class="mockup-body" style="font-size:12px">
+        <strong>Suggested Follow-ups</strong><br>
+        <span style="color:#aaa">• What is the best way to get from Paris to Lyon?</span><br>
+        <span style="color:#aaa">• Are there any day trips from Paris worth taking?</span><br>
+        <span style="color:#aaa">• What should I pack for Paris in October?</span><br><br>
+        <em style="color:#e88">Static text — user must retype the question manually</em>
+      </div>
+    </div>
+    <div class="mockup">
+      <div class="mockup-header">After</div>
+      <div class="mockup-body" style="font-size:12px">
+        <strong>Suggested Follow-ups</strong><br>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px">
+          <button style="background:#1a3a5c;border:1px solid #2196f3;color:#64b5f6;padding:6px 10px;border-radius:6px;text-align:left;cursor:pointer;font-size:11px">💬 Best way to get from Paris to Lyon?</button>
+          <button style="background:#1a3a5c;border:1px solid #2196f3;color:#64b5f6;padding:6px 10px;border-radius:6px;text-align:left;cursor:pointer;font-size:11px">💬 Day trips from Paris worth taking?</button>
+          <button style="background:#1a3a5c;border:1px solid #2196f3;color:#64b5f6;padding:6px 10px;border-radius:6px;text-align:left;cursor:pointer;font-size:11px">💬 What to pack for Paris in October?</button>
+        </div>
+        <em style="color:#4caf50;margin-top:8px;display:block">One click → sends as chat message instantly</em>
+      </div>
+    </div>
+  </div>
+  <p style="font-size:12px;color:#aaa;margin-top:8px">In <code>app.py</code>: render each follow-up as <code>st.button()</code> inside the answer/itinerary renderer. On click, inject into chat state and call <code>_run_graph()</code> — same flow as the chat input.</p>
+</div>
+
+<p style="margin-top:16px;font-size:13px;color:#aaa">Does this look right? Reply in terminal and we'll move to the full written spec.</p>

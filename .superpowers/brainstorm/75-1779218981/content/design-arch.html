@@ -1,0 +1,77 @@
+<h2>Design — Section 1: Architecture</h2>
+<p class="subtitle">What changes in the graph and which new components are added</p>
+
+<div class="section">
+  <h3>Current Graph</h3>
+  <div class="mockup">
+    <div class="mockup-body" style="font-family:monospace;font-size:13px;line-height:2">
+      <span style="color:#888">collect_requirements</span>
+      → <span style="color:#888">validate_inputs</span>
+      → <span style="color:#888">ask_clarification</span> <em style="color:#aaa">(if needed)</em><br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↓<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#888">search_with_tavily</span> <em style="color:#e88">(sequential, 5–6 serial HTTP calls)</em><br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↓<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#888">generate_response</span> <em style="color:#e88">(GPT-4o, raw JSON parsing)</em><br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↓<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#888">respond_to_user</span>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>New Graph (Approach C)</h3>
+  <div class="mockup">
+    <div class="mockup-body" style="font-family:monospace;font-size:13px;line-height:2">
+      <span style="color:#4caf50">collect_requirements</span> <em style="color:#aaa">(structured output, no raw JSON)</em><br>
+      → <span style="color:#4caf50">validate_inputs</span><br>
+      → <span style="color:#4caf50">ask_clarification</span> <em style="color:#aaa">(if needed, structured output)</em><br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↓<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#2196f3">search_with_tavily</span> <em style="color:#64b5f6">(parallel: ThreadPoolExecutor)</em><br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#2196f3">+ expedia_hotel_search</span> <em style="color:#64b5f6">(runs alongside Tavily)</em><br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↓<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#ff9800">generate_response</span> <em style="color:#ffb74d">(Claude Sonnet 4.6, rewritten prompts)</em><br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↓ <em style="color:#aaa">(itinerary only)</em><br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="background:#ff980033;padding:2px 6px;border-radius:4px">✨ NEW: personalization_check</span> <em style="color:#ffb74d">(fast Claude Haiku pass)</em><br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↓<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#4caf50">respond_to_user</span>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>5 Key Changes</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:13px">
+    <tr style="background:#1e1e1e">
+      <th style="padding:8px;text-align:left">Component</th>
+      <th style="padding:8px;text-align:left">Before</th>
+      <th style="padding:8px;text-align:left">After</th>
+    </tr>
+    <tr style="border-bottom:1px solid #333">
+      <td style="padding:8px">LLM (generation)</td>
+      <td style="padding:8px;color:#e88">GPT-4o</td>
+      <td style="padding:8px;color:#4caf50">Claude Sonnet 4.6</td>
+    </tr>
+    <tr style="border-bottom:1px solid #333">
+      <td style="padding:8px">Search</td>
+      <td style="padding:8px;color:#e88">Sequential (5–6 calls, ~8s)</td>
+      <td style="padding:8px;color:#4caf50">Parallel (same calls, ~2–3s)</td>
+    </tr>
+    <tr style="border-bottom:1px solid #333">
+      <td style="padding:8px">Hotel data</td>
+      <td style="padding:8px;color:#e88">Tavily scrape (unreliable)</td>
+      <td style="padding:8px;color:#4caf50">Expedia MCP (real listings)</td>
+    </tr>
+    <tr style="border-bottom:1px solid #333">
+      <td style="padding:8px">JSON parsing</td>
+      <td style="padding:8px;color:#e88">json.loads() — silent failures</td>
+      <td style="padding:8px;color:#4caf50">with_structured_output everywhere</td>
+    </tr>
+    <tr style="border-bottom:1px solid #333">
+      <td style="padding:8px">Personalization</td>
+      <td style="padding:8px;color:#e88">No post-generation check</td>
+      <td style="padding:8px;color:#4caf50">Haiku verifies &amp; patches itinerary</td>
+    </tr>
+  </table>
+</div>
+
+<p style="margin-top:16px;font-size:13px;color:#aaa">Does this architecture look right to you? Reply in terminal.</p>

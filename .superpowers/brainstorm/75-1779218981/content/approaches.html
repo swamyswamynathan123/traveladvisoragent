@@ -1,0 +1,85 @@
+<h2>3 Approaches to Improve AI Response Quality</h2>
+<p class="subtitle">All four issues: generic output, poor personalization, unreliable facts, shallow detail</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Prompt Rewrite Only</h3>
+      <p>Rewrite all 3 prompts to demand specificity, enforce personalization, and require detail. Switch from GPT-4o to Claude Sonnet 4.6 for better instruction-following.</p>
+      <div class="pros-cons">
+        <div class="pros">
+          <h4>Pros</h4>
+          <ul>
+            <li>Fastest to ship (1–2 days)</li>
+            <li>No infrastructure changes</li>
+            <li>Immediate quality boost on generic/shallow issues</li>
+          </ul>
+        </div>
+        <div class="cons">
+          <h4>Cons</h4>
+          <ul>
+            <li>Still limited by what Tavily finds</li>
+            <li>Doesn't fix unreliable hotel/restaurant facts</li>
+            <li>Searches still run sequentially (slow)</li>
+          </ul>
+        </div>
+      </div>
+      <p><span class="label">Fixes</span> Generic output ✓ &nbsp; Shallow detail ✓ &nbsp; Personalization ✓ &nbsp; Unreliable facts ✗</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Search Upgrade + Prompt Rewrite</h3>
+      <p>Parallelise all Tavily searches (3× faster), add Expedia MCP for real hotel &amp; flight data, rewrite prompts, and fix all nodes to use structured output (no more fragile JSON parsing).</p>
+      <div class="pros-cons">
+        <div class="pros">
+          <h4>Pros</h4>
+          <ul>
+            <li>Real hotel data = trustworthy suggestions</li>
+            <li>Noticeably faster responses</li>
+            <li>More reliable — no silent JSON failures</li>
+            <li>Richer search context → better specificity</li>
+          </ul>
+        </div>
+        <div class="cons">
+          <h4>Cons</h4>
+          <ul>
+            <li>More moving parts than A</li>
+            <li>Expedia MCP adds a new dependency</li>
+          </ul>
+        </div>
+      </div>
+      <p><span class="label">Fixes</span> Generic output ✓ &nbsp; Shallow detail ✓ &nbsp; Personalization ✓ &nbsp; Unreliable facts ✓</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Full Quality Pipeline (Recommended)</h3>
+      <p>Everything in B, plus: switch to Claude Sonnet 4.6 for generation, add a lightweight personalization-check pass after itinerary generation, and make follow-up questions clickable in the UI.</p>
+      <div class="pros-cons">
+        <div class="pros">
+          <h4>Pros</h4>
+          <ul>
+            <li>Tackles all 4 issues systematically</li>
+            <li>Claude is significantly better at following complex constraints</li>
+            <li>Personalization check catches drift before showing user</li>
+            <li>Clickable follow-ups make the whole app feel alive</li>
+          </ul>
+        </div>
+        <div class="cons">
+          <h4>Cons</h4>
+          <ul>
+            <li>Most work (~3–4 days)</li>
+            <li>Extra LLM call adds ~2–3s latency</li>
+          </ul>
+        </div>
+      </div>
+      <p><span class="label">Fixes</span> Generic output ✓ &nbsp; Shallow detail ✓ &nbsp; Personalization ✓ &nbsp; Unreliable facts ✓</p>
+    </div>
+  </div>
+</div>
