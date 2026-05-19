@@ -160,25 +160,25 @@ def ask_clarification_node(state: dict) -> dict:
     )
 
     try:
-        response = _llm(temperature=0.3).invoke(
+        structured_llm = _llm(temperature=0.3).with_structured_output(ClarificationResponse)
+        data: ClarificationResponse = structured_llm.invoke(
             [SystemMessage(content=SYSTEM_PROMPT), HumanMessage(content=prompt)]
         )
-        data: dict = json.loads(response.content)
     except Exception as exc:
         logger.error("ask_clarification_node failed: %s", exc)
-        data = {
-            "message": "I'd love to help plan your trip! Could you tell me where you'd like to go and for how long?",
-            "missing_fields": missing,
-            "open_questions": [
+        data = ClarificationResponse(
+            message="I'd love to help plan your trip! Could you tell me where you'd like to go and for how long?",
+            missing_fields=missing,
+            open_questions=[
                 "What is your destination?",
                 "How many days will you be traveling?",
             ],
-        }
+        )
 
     return {
         **state,
-        "final_response": {"type": "clarification", "data": data},
-        "draft": data.get("message", ""),
+        "final_response": {"type": "clarification", "data": data.model_dump()},
+        "draft": data.message,
     }
 
 

@@ -268,3 +268,35 @@ def test_collect_requirements_empty_messages_returns_state():
     state = {"messages": []}
     result = collect_requirements_node(state)
     assert result == state
+
+
+# ── ask_clarification_node ───────────────────────────────────────────────────
+
+def test_ask_clarification_node_returns_clarification_response():
+    from graph import ask_clarification_node
+    from schemas import ClarificationResponse
+    from unittest.mock import patch, MagicMock
+
+    mock_output = ClarificationResponse(
+        message="Where would you like to go, and for how long?",
+        missing_fields=["destination", "duration_days"],
+        open_questions=["What is your destination?", "How many days?"],
+    )
+
+    with patch("graph._llm") as mock_llm_fn:
+        mock_llm = MagicMock()
+        mock_structured = MagicMock()
+        mock_structured.invoke.return_value = mock_output
+        mock_llm.with_structured_output.return_value = mock_structured
+        mock_llm_fn.return_value = mock_llm
+
+        state = {
+            "trip_request": {},
+            "clarification_questions": ["destination", "duration_days"],
+        }
+        result = ask_clarification_node(state)
+
+    assert result["final_response"]["type"] == "clarification"
+    data = result["final_response"]["data"]
+    assert "destination" in data["missing_fields"]
+    assert len(data["open_questions"]) == 2
