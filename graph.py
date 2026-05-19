@@ -45,7 +45,10 @@ def build_initial_state() -> dict:
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
-def _llm(model: str = "gpt-4o-mini", temperature: float = 0.0) -> ChatOpenAI:
+def _llm(model: str = "gpt-4o-mini", temperature: float = 0.0):
+    if model.startswith("claude"):
+        from langchain_anthropic import ChatAnthropic
+        return ChatAnthropic(model=model, temperature=temperature)
     return ChatOpenAI(model=model, temperature=temperature)
 
 
