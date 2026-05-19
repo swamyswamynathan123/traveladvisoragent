@@ -92,3 +92,45 @@ def test_tavily_search_empty_results():
 
     assert out.tool_status == "ok"
     assert out.results == []
+
+
+def test_expedia_hotel_search_returns_hotel_results():
+    from tools import expedia_hotel_search
+
+    fake_result = {
+        "title": "Generator Paris — Budget Hotel",
+        "url": "https://booking.com/generator-paris",
+        "content": "Trendy budget hotel near Canal Saint-Martin. Dorms and private rooms.",
+        "type": "web",
+    }
+    mock_client = _make_mock_client([fake_result])
+    with patch("tools.TAVILY_API_KEY", FAKE_KEY), patch("tools.TavilyClient", return_value=mock_client):
+        out = expedia_hotel_search(destination="Paris", check_in="2026-06-01", budget_level="budget")
+
+    assert out.tool_status == "ok"
+    assert len(out.results) == 1
+    assert "Generator Paris" in out.results[0].title
+    assert out.results[0].source_type == "hotel_search"
+
+
+def test_expedia_hotel_search_returns_empty_on_api_error():
+    from tools import expedia_hotel_search
+
+    mock_client = _make_mock_client(raise_exc=RuntimeError("timeout"))
+    with patch("tools.TAVILY_API_KEY", FAKE_KEY), patch("tools.TavilyClient", return_value=mock_client):
+        out = expedia_hotel_search(destination="Paris", check_in="2026-06-01")
+
+    assert out.tool_status == "error"
+    assert out.results == []
+
+
+def test_expedia_hotel_search_uses_budget_label():
+    from tools import expedia_hotel_search
+
+    mock_client = _make_mock_client([])
+    with patch("tools.TAVILY_API_KEY", FAKE_KEY), patch("tools.TavilyClient", return_value=mock_client):
+        expedia_hotel_search(destination="Tokyo", check_in="2026-07-10", budget_level="luxury")
+
+    query_used = mock_client.search.call_args.kwargs["query"]
+    assert "luxury" in query_used.lower()
+    assert "Tokyo" in query_used

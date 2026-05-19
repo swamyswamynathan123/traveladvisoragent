@@ -77,3 +77,34 @@ def tripadvisor_search(
     Use for attractions/hotels only — not restaurants (TripAdvisor restaurant pages are JS-rendered)."""
     targeted_query = f"{query} tripadvisor"
     return tavily_search(query=targeted_query, search_depth="advanced", max_results=max_results)
+
+
+def expedia_hotel_search(
+    destination: str,
+    check_in: str,
+    budget_level: str = "mid_range",
+) -> TavilySearchOutput:
+    """Search for hotels via targeted booking-site queries.
+    Results are tagged source_type='hotel_search' to separate them from activity results."""
+    budget_labels = {
+        "budget": "budget hostel cheap",
+        "mid_range": "hotel",
+        "luxury": "luxury 5-star hotel",
+    }
+    label = budget_labels.get(budget_level, "hotel")
+    query = f"best {label} {destination} {check_in} recommended booking"
+    result = tavily_search(query=query, search_depth="advanced", max_results=5)
+
+    if result.tool_status != "ok":
+        return result
+
+    tagged_results = [
+        TavilyResult(
+            title=r.title,
+            url=r.url,
+            content_snippet=r.content_snippet,
+            source_type="hotel_search",
+        )
+        for r in result.results
+    ]
+    return TavilySearchOutput(results=tagged_results, query=query, tool_status="ok")
