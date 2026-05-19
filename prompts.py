@@ -62,32 +62,51 @@ Return ONLY valid JSON with this structure:
 
 
 ITINERARY_GENERATION_PROMPT = """\
-Create a detailed day-by-day travel itinerary based on the information below.
+=== PERSONALIZATION CONTRACT ===
+Before writing anything, you MUST honor ALL of the following for every day:
+• Budget: {budget_level} — {budget_guidance}
+• Pace: {pace} — {pace_description}
+• Interests: {interests_list} — at least 60% of activities must directly reflect these interests
+• Constraints: {constraints_list} — these are HARD rules, never violate them under any circumstance
 
-Trip Request:
+=== TRIP REQUEST ===
 {trip_request}
 
-Traveler Profile:
+=== TRAVELER PROFILE ===
 {user_profile}
 
-Web Search Results (from Tavily):
+=== WEB SEARCH RESULTS ===
 {tavily_context}
+
+=== HOTEL SEARCH RESULTS ===
+{hotel_context}
+
+=== ACTIVITY DEPTH RULES ===
+For EVERY activity block:
+1. Use the specific venue name — never "a local market", always e.g. "Mercado de San Miguel"
+2. Write 2–3 sentences in notes: what it is, why it suits THIS traveler given their interests, one practical tip
+3. Specify transport: exact metro line, bus number, or "10-min walk from [landmark]"
+4. Set duration_hours to the recommended time at the venue
+5. Include: best arrival time (e.g. "arrive before 9am to avoid queues"), book-ahead flag
+6. For dining blocks: use specific restaurant names from search results. If none available, write "Find a [cuisine] restaurant near [neighborhood]" — never vague descriptions or "no specific details available"
+
+=== LOGISTICS RULES ===
+logistics_notes must cover:
+• Exact transport between each day's areas (metro line numbers, bus routes, taxi estimate in local currency)
+• Which activities need advance booking and how far ahead (e.g. "Book Alhambra tickets 2–3 weeks ahead")
+• Rough daily spend estimate at {budget_level} level in local currency
 
 Generate a complete itinerary. Return ONLY valid JSON matching this schema exactly:
 {schema}
 
-Instructions:
+Additional instructions:
 1. Build morning/afternoon/evening blocks for every day.
-2. For every activity block, always write 1-2 sentences in the notes field describing what the attraction is and why it is worth visiting. Never leave notes empty for sightseeing or cultural activities.
-3. Only add "[General knowledge]" at the end of the notes sentence when citing specific operational facts (admission prices, opening hours, booking links) that do NOT appear in the search results. Do not add the marker to descriptive sentences about the attraction itself.
-4. For dining activities: use specific restaurant names from the search results (e.g., "Dinner at Teresa Carles"). If no restaurant names appear in search results, set the activity to "Find a [cuisine] restaurant near [neighborhood]" and leave notes empty — NEVER write sentences like "no specific details available", "verify before traveling", or "based on general knowledge" in dining blocks. Do not explain the lack of data; just use the "Find a..." format.
-5. Include at least one rainy-day alternative under "alternatives".
-6. Populate "hotel_suggestions" with 2-3 hotels per city. Use hotel names from search results when available; otherwise use training knowledge and mark the notes field as "[General knowledge — verify availability before booking]". Each suggestion must include name, city, neighborhood (if known), budget_level (budget/mid_range/luxury), and a 1-sentence description.
-7. Populate "restaurant_suggestions" with 2-3 restaurants per city that match the traveler's cuisine preferences and dietary constraints. Use restaurant names from search results when available; otherwise use training knowledge and mark notes as "[General knowledge — verify current status before visiting]". Each suggestion must include name, city, cuisine, price_range ($ / $$ / $$$), and a 1-sentence description.
-8. logistics_notes must cover: transport between days, booking lead times, rough budget guidance.
-9. List every assumption you made in "assumptions".
-10. List unresolved open questions in "open_questions" (e.g., unknown hotel area preference).
-11. Populate "sources" from the Tavily results you actually referenced."""
+2. Include at least one rainy-day alternative under "alternatives".
+3. Populate hotel_suggestions with 2–3 hotels per city at {budget_level} tier. Use hotel names from the Hotel Search Results section first; use training knowledge as fallback and mark notes as "[General knowledge — verify availability before booking]".
+4. Populate restaurant_suggestions with 2–3 per city matching the traveler's interests and constraints. Use search results first; training knowledge marked "[General knowledge — verify current status before visiting]" as fallback.
+5. List every assumption you made in "assumptions".
+6. List unresolved questions in "open_questions".
+7. Populate "sources" only from search results you actually referenced."""
 
 
 QUESTION_ANSWER_PROMPT = """\

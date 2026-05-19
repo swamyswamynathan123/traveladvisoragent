@@ -21,6 +21,18 @@ from prompts import (
 logger = logging.getLogger(__name__)
 MAX_TOOL_CALLS = 9
 
+PACE_DESCRIPTIONS = {
+    "relaxed": "max 2–3 activities per day, allow long lunches and afternoon rest",
+    "moderate": "3–4 activities per day with breathing room between",
+    "packed": "5–6 activities per day, efficient transitions, no dead time",
+}
+
+BUDGET_GUIDANCE = {
+    "budget": "prioritise free attractions, street food and markets, hostels/guesthouses, public transit exclusively — avoid paid tours and taxis",
+    "mid_range": "mix of paid attractions and free ones, sit-down restaurants ($$), 3-star hotels, occasional taxi",
+    "luxury": "premium experiences: skip-the-line tickets, tasting menus ($$$), 4–5 star hotels, private transfers and guides",
+}
+
 
 # ── state factory ─────────────────────────────────────────────────────────────
 
@@ -55,11 +67,26 @@ def _llm(model: str = "gpt-4o-mini", temperature: float = 0.0):
 def _format_tavily_context(tavily_context: list) -> str:
     if not tavily_context:
         return "No search results available. Use general knowledge and mark claims accordingly."
+    items = [r for r in tavily_context if r.get("source_type") != "hotel_search"]
+    if not items:
+        return "No search results available. Use general knowledge and mark claims accordingly."
     lines: list[str] = []
-    for i, item in enumerate(tavily_context[:10], start=1):
+    for i, item in enumerate(items[:10], start=1):
         lines.append(f"\n[{i}] {item.get('title', 'Unknown source')}")
         lines.append(f"URL: {item.get('url', '')}")
         lines.append(f"Snippet: {item.get('content_snippet', '')}")
+    return "\n".join(lines)
+
+
+def _format_hotel_context(tavily_context: list) -> str:
+    items = [r for r in tavily_context if r.get("source_type") == "hotel_search"]
+    if not items:
+        return "No hotel search results available."
+    lines: list[str] = []
+    for i, item in enumerate(items[:5], start=1):
+        lines.append(f"\n[H{i}] {item.get('title', 'Hotel')}")
+        lines.append(f"URL: {item.get('url', '')}")
+        lines.append(f"Details: {item.get('content_snippet', '')}")
     return "\n".join(lines)
 
 
@@ -322,10 +349,23 @@ def generate_response_node(state: dict) -> dict:
 def _generate_itinerary(state: dict) -> dict:
     llm = _llm(model="gpt-4o", temperature=0.3)
     schema_str = json.dumps(ItineraryResponse.model_json_schema(), indent=2)
+    trip_req = state.get("trip_request") or {}
+    pace = trip_req.get("pace", "moderate")
+    budget_level = trip_req.get("budget_level", "mid_range")
+    interests = trip_req.get("interests", [])
+    constraints = trip_req.get("constraints", [])
+
     prompt = ITINERARY_GENERATION_PROMPT.format(
-        trip_request=json.dumps(state.get("trip_request") or {}, indent=2),
+        trip_request=json.dumps(trip_req, indent=2),
         user_profile=json.dumps(state.get("user_profile") or {}, indent=2),
         tavily_context=_format_tavily_context(state.get("tavily_context", [])),
+        hotel_context=_format_hotel_context(state.get("tavily_context", [])),
+        pace_description=PACE_DESCRIPTIONS.get(pace, PACE_DESCRIPTIONS["moderate"]),
+        budget_guidance=BUDGET_GUIDANCE.get(budget_level, BUDGET_GUIDANCE["mid_range"]),
+        interests_list=", ".join(str(i) for i in interests) if interests else "general sightseeing",
+        constraints_list=", ".join(str(c) for c in constraints) if constraints else "none",
+        budget_level=budget_level,
+        pace=pace,
         schema=schema_str,
     )
     try:
