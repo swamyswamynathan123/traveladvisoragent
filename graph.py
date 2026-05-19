@@ -67,6 +67,7 @@ def _format_tavily_context(tavily_context: list) -> str:
 
 def collect_requirements_node(state: dict) -> dict:
     """Parse the latest user message to extract intent and request details."""
+    from schemas import IntentDetectionOutput
     messages = state.get("messages", [])
     if not messages:
         return state
@@ -75,15 +76,15 @@ def collect_requirements_node(state: dict) -> dict:
     prompt = INTENT_DETECTION_PROMPT.format(user_message=latest)
 
     try:
-        response = _llm().invoke(
+        structured_llm = _llm().with_structured_output(IntentDetectionOutput)
+        parsed: IntentDetectionOutput = structured_llm.invoke(
             [SystemMessage(content=SYSTEM_PROMPT), HumanMessage(content=prompt)]
         )
-        parsed: dict = json.loads(response.content)
 
-        intent = parsed.get("intent", "unknown")
-        trip_req = parsed.get("trip_request") or {}
-        travel_q = parsed.get("travel_question")
-        clarification_needed: list = parsed.get("clarification_needed", [])
+        intent = parsed.intent
+        trip_req = parsed.trip_request or {}
+        travel_q = parsed.travel_question
+        clarification_needed = parsed.clarification_needed
 
         collected_info = {
             "has_destination": bool(trip_req.get("destination")),
@@ -97,8 +98,6 @@ def collect_requirements_node(state: dict) -> dict:
             ),
         }
 
-        # If planning intent is incomplete and the message looks like a question,
-        # treat it as question intent to avoid spurious clarification requests.
         is_planning_complete = collected_info.get("is_complete_for_planning", False)
         question_words = ("what", "when", "where", "how", "which", "why", "is ", "are ",
                           "do ", "can ", "should ", "would ", "?")
@@ -108,7 +107,6 @@ def collect_requirements_node(state: dict) -> dict:
             intent = "question"
             travel_q = travel_q or latest
 
-        # Ensure travel_question is never null when intent is "question"
         resolved_question = travel_q or (latest if intent == "question" else None)
 
         return {
@@ -124,7 +122,7 @@ def collect_requirements_node(state: dict) -> dict:
             "clarification_questions": clarification_needed if intent == "planning" else [],
         }
 
-    except (json.JSONDecodeError, Exception) as exc:
+    except Exception as exc:
         logger.error("collect_requirements_node failed: %s", exc)
         return {**state, "error": str(exc)}
 

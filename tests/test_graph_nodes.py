@@ -205,3 +205,66 @@ def test_respond_to_user_no_response_leaves_messages_unchanged():
     state["final_response"] = None
     result = respond_to_user_node(state)
     assert result["messages"] == [{"role": "user", "content": "hi"}]
+
+
+# ── collect_requirements_node ─────────────────────────────────────────────────
+
+def test_collect_requirements_planning_intent():
+    from graph import collect_requirements_node
+    from schemas import IntentDetectionOutput
+    from unittest.mock import patch, MagicMock
+
+    mock_output = IntentDetectionOutput(
+        intent="planning",
+        trip_request={"destination": "Paris", "duration_days": 5},
+        travel_question=None,
+        clarification_needed=[],
+    )
+
+    with patch("graph._llm") as mock_llm_fn:
+        mock_llm = MagicMock()
+        mock_structured = MagicMock()
+        mock_structured.invoke.return_value = mock_output
+        mock_llm.with_structured_output.return_value = mock_structured
+        mock_llm_fn.return_value = mock_llm
+
+        state = {"messages": [{"role": "user", "content": "Plan a 5-day trip to Paris"}]}
+        result = collect_requirements_node(state)
+
+    assert result["intent"] == "planning"
+    assert result["trip_request"]["destination"] == "Paris"
+    assert result["collected_info"]["has_destination"] is True
+    assert result["collected_info"]["is_complete_for_planning"] is True
+
+
+def test_collect_requirements_question_intent():
+    from graph import collect_requirements_node
+    from schemas import IntentDetectionOutput
+    from unittest.mock import patch, MagicMock
+
+    mock_output = IntentDetectionOutput(
+        intent="question",
+        trip_request=None,
+        travel_question="Best time to visit Tokyo?",
+        clarification_needed=[],
+    )
+
+    with patch("graph._llm") as mock_llm_fn:
+        mock_llm = MagicMock()
+        mock_structured = MagicMock()
+        mock_structured.invoke.return_value = mock_output
+        mock_llm.with_structured_output.return_value = mock_structured
+        mock_llm_fn.return_value = mock_llm
+
+        state = {"messages": [{"role": "user", "content": "Best time to visit Tokyo?"}]}
+        result = collect_requirements_node(state)
+
+    assert result["intent"] == "question"
+    assert result["travel_question"]["question"] == "Best time to visit Tokyo?"
+
+
+def test_collect_requirements_empty_messages_returns_state():
+    from graph import collect_requirements_node
+    state = {"messages": []}
+    result = collect_requirements_node(state)
+    assert result == state
