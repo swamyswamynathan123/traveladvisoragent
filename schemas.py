@@ -46,6 +46,13 @@ class TravelQuestion(BaseModel):
     context: Optional[str] = None
 
 
+class IntentDetectionOutput(BaseModel):
+    intent: Literal["planning", "question", "unknown"] = "unknown"
+    trip_request: Optional[dict] = None
+    travel_question: Optional[str] = None
+    clarification_needed: List[str] = Field(default_factory=list)
+
+
 class Source(BaseModel):
     title: str
     url: str

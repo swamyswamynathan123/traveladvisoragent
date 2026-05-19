@@ -117,3 +117,36 @@ def test_travel_agent_state_defaults():
     assert state.needs_clarification is False
     assert state.tavily_context == []
     assert state.messages == []
+
+
+def test_intent_detection_output_planning():
+    from schemas import IntentDetectionOutput
+    obj = IntentDetectionOutput(
+        intent="planning",
+        trip_request={"destination": "Paris", "duration_days": 5},
+        travel_question=None,
+        clarification_needed=[],
+    )
+    assert obj.intent == "planning"
+    assert obj.trip_request["destination"] == "Paris"
+    assert obj.clarification_needed == []
+
+
+def test_intent_detection_output_question():
+    from schemas import IntentDetectionOutput
+    obj = IntentDetectionOutput(
+        intent="question",
+        trip_request=None,
+        travel_question="Best time to visit Tokyo?",
+        clarification_needed=[],
+    )
+    assert obj.intent == "question"
+    assert obj.travel_question == "Best time to visit Tokyo?"
+
+
+def test_intent_detection_output_defaults():
+    from schemas import IntentDetectionOutput
+    obj = IntentDetectionOutput(intent="unknown")
+    assert obj.trip_request is None
+    assert obj.travel_question is None
+    assert obj.clarification_needed == []
