@@ -221,7 +221,7 @@ def search_with_tavily_node(state: dict) -> dict:
         logger.warning("MAX_TOOL_CALLS reached — skipping search")
         return state
 
-    # Each entry is (fn, kwargs, is_hotel_search)
+    # Each entry is (fn, kwargs)
     search_tasks: list[tuple] = []
 
     if intent == "planning":
@@ -234,13 +234,13 @@ def search_with_tavily_node(state: dict) -> dict:
         start_date = trip_req.get("start_date", "")
 
         search_tasks += [
-            (tripadvisor_search, {"query": f"{dest} top attractions things to do", "max_results": 5}, False),
-            (tavily_search, {"query": f"{dest} travel tips transportation budget", "max_results": 5}, False),
+            (tripadvisor_search, {"query": f"{dest} top attractions things to do", "max_results": 5}),
+            (tavily_search, {"query": f"{dest} travel tips transportation budget", "max_results": 5}),
         ]
         if interests:
             interests_str = " ".join(str(i) for i in interests[:2])
             search_tasks.append(
-                (tripadvisor_search, {"query": f"{dest} {interests_str} recommendations", "max_results": 5}, False)
+                (tripadvisor_search, {"query": f"{dest} {interests_str} recommendations", "max_results": 5})
             )
 
         dietary_keywords = ["vegetarian", "vegan", "halal", "kosher", "gluten-free", "dairy-free"]
@@ -258,7 +258,6 @@ def search_with_tavily_node(state: dict) -> dict:
                 search_tasks.append((
                     tavily_search_advanced,
                     {"query": f"{food_label} restaurants {city} recommended named list 2024", "max_results": 5},
-                    False,
                 ))
 
         city_names = [c.strip() for c in re.split(r"[,+&]|\band\b", dest, flags=re.IGNORECASE) if c.strip()]
@@ -267,7 +266,6 @@ def search_with_tavily_node(state: dict) -> dict:
             search_tasks.append((
                 tripadvisor_search,
                 {"query": f"best {budget_level.replace('_', ' ')} hotels {city} recommended 2024", "max_results": 5},
-                False,
             ))
 
         if start_date:
@@ -275,7 +273,6 @@ def search_with_tavily_node(state: dict) -> dict:
                 search_tasks.append((
                     expedia_hotel_search,
                     {"destination": city, "check_in": start_date, "budget_level": budget_level},
-                    True,
                 ))
 
     elif intent == "question":
@@ -303,25 +300,32 @@ def search_with_tavily_node(state: dict) -> dict:
                     search_tasks.append((
                         tavily_search_advanced,
                         {"query": f"best {food_label} restaurants {city} 2024 recommended", "max_results": 5},
-                        False,
                     ))
             else:
                 enriched_q = f"{food_label} restaurants {dest or q}".strip()
-                search_tasks.append((tavily_search_advanced, {"query": enriched_q, "max_results": 5}, False))
+                search_tasks.append((tavily_search_advanced, {"query": enriched_q, "max_results": 5}))
         else:
             enriched_q = f"{q} {dest}".strip() if dest and dest.lower() not in q.lower() else q
-            search_tasks.append((tavily_search, {"query": enriched_q, "max_results": 5}, False))
+            search_tasks.append((tavily_search, {"query": enriched_q, "max_results": 5}))
             if start_date and dest:
-                search_tasks.append((tavily_search, {"query": f"{dest} weather {start_date}", "max_results": 5}, False))
+                search_tasks.append((tavily_search, {"query": f"{dest} weather {start_date}", "max_results": 5}))
     else:
         return state
 
     # Cap to remaining budget
     search_tasks = search_tasks[:MAX_TOOL_CALLS - call_count]
 
+    if not search_tasks:
+        return state
+
     def _run_task(task):
-        fn, kwargs, _ = task
-        return fn(**kwargs)
+        fn, kwargs = task[:2]
+        try:
+            return fn(**kwargs)
+        except Exception as exc:
+            logger.warning("Search task %s failed: %s", fn.__name__, exc)
+            from schemas import TavilySearchOutput
+            return TavilySearchOutput(results=[], query=str(kwargs), tool_status="error")
 
     accumulated: list = list(state.get("tavily_context", []))
     new_call_count = call_count

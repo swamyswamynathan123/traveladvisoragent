@@ -103,11 +103,11 @@ def test_should_clarify_false():
 # ── search_with_tavily_node ───────────────────────────────────────────────────
 
 def test_search_node_skips_when_max_calls_reached():
-    from graph import search_with_tavily_node
+    from graph import search_with_tavily_node, MAX_TOOL_CALLS
     state = _planning_state()
-    state["tool_call_count"] = 6
+    state["tool_call_count"] = MAX_TOOL_CALLS
     result = search_with_tavily_node(state)
-    assert result["tool_call_count"] == 6  # unchanged
+    assert result["tool_call_count"] == MAX_TOOL_CALLS  # unchanged — node skipped
 
 
 def test_search_node_increments_call_count():
