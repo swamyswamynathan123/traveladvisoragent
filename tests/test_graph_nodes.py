@@ -349,3 +349,116 @@ def test_ask_clarification_node_returns_clarification_response():
     data = result["final_response"]["data"]
     assert "destination" in data["missing_fields"]
     assert len(data["open_questions"]) == 2
+
+
+# ── personalization_check_node ────────────────────────────────────────────────
+
+def test_personalization_check_patches_budget_violation():
+    from graph import personalization_check_node
+    from schemas import ItineraryResponse, DayPlan, TimeBlock, HotelSuggestion
+    from unittest.mock import patch, MagicMock
+
+    original = ItineraryResponse(
+        destination="Paris",
+        duration="5 days",
+        itinerary=[
+            DayPlan(
+                day_number=1,
+                theme="Arrival",
+                blocks=[TimeBlock(time_of_day="afternoon", activity="Check in")],
+            )
+        ],
+        hotel_suggestions=[
+            HotelSuggestion(name="Four Seasons George V", city="Paris", budget_level="luxury")
+        ],
+        logistics_notes="Take metro.",
+    )
+    patched = ItineraryResponse(
+        destination="Paris",
+        duration="5 days",
+        itinerary=original.itinerary,
+        hotel_suggestions=[
+            HotelSuggestion(name="Generator Paris", city="Paris", budget_level="budget")
+        ],
+        logistics_notes="Take metro.",
+    )
+
+    state = {
+        "intent": "planning",
+        "trip_request": {
+            "destination": "Paris",
+            "budget_level": "budget",
+            "pace": "moderate",
+            "interests": [],
+            "constraints": [],
+        },
+        "itinerary_response": {"type": "itinerary", "data": original.model_dump()},
+        "final_response": {"type": "itinerary", "data": original.model_dump()},
+    }
+
+    with patch("graph._llm") as mock_llm_fn:
+        mock_llm = MagicMock()
+        mock_structured = MagicMock()
+        mock_structured.invoke.return_value = patched
+        mock_llm.with_structured_output.return_value = mock_structured
+        mock_llm_fn.return_value = mock_llm
+
+        result = personalization_check_node(state)
+
+    hotels = result["itinerary_response"]["data"]["hotel_suggestions"]
+    assert hotels[0]["name"] == "Generator Paris"
+
+
+def test_personalization_check_skips_for_question_intent():
+    from graph import personalization_check_node
+
+    state = {
+        "intent": "question",
+        "final_response": {"type": "answer", "data": {"answer": "Spring is best."}},
+        "itinerary_response": None,
+    }
+    result = personalization_check_node(state)
+    assert result is state  # exact same object, no copy made
+
+
+def test_personalization_check_falls_back_on_llm_error():
+    from graph import personalization_check_node
+    from schemas import ItineraryResponse, DayPlan, TimeBlock
+    from unittest.mock import patch, MagicMock
+
+    original_data = ItineraryResponse(
+        destination="Paris",
+        duration="5 days",
+        itinerary=[DayPlan(day_number=1, theme="Arrival",
+                           blocks=[TimeBlock(time_of_day="morning", activity="Arrive")])],
+        logistics_notes="fly in",
+    ).model_dump()
+
+    state = {
+        "intent": "planning",
+        "trip_request": {"destination": "Paris", "budget_level": "mid_range",
+                         "pace": "moderate", "interests": [], "constraints": []},
+        "itinerary_response": {"type": "itinerary", "data": original_data},
+        "final_response": {"type": "itinerary", "data": original_data},
+    }
+
+    with patch("graph._llm") as mock_llm_fn:
+        mock_llm = MagicMock()
+        mock_structured = MagicMock()
+        mock_structured.invoke.side_effect = RuntimeError("Claude timeout")
+        mock_llm.with_structured_output.return_value = mock_structured
+        mock_llm_fn.return_value = mock_llm
+
+        result = personalization_check_node(state)
+
+    assert result["itinerary_response"]["data"]["destination"] == "Paris"
+
+
+def test_should_check_personalization_planning():
+    from graph import should_check_personalization
+    assert should_check_personalization({"intent": "planning"}) == "personalization_check"
+
+
+def test_should_check_personalization_question():
+    from graph import should_check_personalization
+    assert should_check_personalization({"intent": "question"}) == "respond_to_user"

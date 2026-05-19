@@ -16,6 +16,7 @@ from prompts import (
     ITINERARY_GENERATION_PROMPT,
     QUESTION_ANSWER_PROMPT,
     SCHEMA_REPAIR_PROMPT,
+    PERSONALIZATION_CHECK_PROMPT,
 )
 
 logger = logging.getLogger(__name__)
@@ -465,6 +466,53 @@ def _retry_with_repair(llm, state: dict, resp_type: str, schema_cls, schema_str:
         }
 
 
+def should_check_personalization(state: dict) -> str:
+    """Conditional edge: route planning responses through quality check."""
+    return "personalization_check" if state.get("intent") == "planning" else "respond_to_user"
+
+
+def personalization_check_node(state: dict) -> dict:
+    """Claude Haiku pass: verify itinerary honors user's personalization contract."""
+    if state.get("intent") != "planning":
+        return state
+
+    itinerary_response = state.get("itinerary_response")
+    if not itinerary_response:
+        return state
+
+    trip_req = state.get("trip_request") or {}
+    pace = trip_req.get("pace", "moderate")
+    budget_level = trip_req.get("budget_level", "mid_range")
+    interests = trip_req.get("interests", [])
+    constraints = trip_req.get("constraints", [])
+
+    schema_str = json.dumps(ItineraryResponse.model_json_schema(), indent=2)
+    prompt = PERSONALIZATION_CHECK_PROMPT.format(
+        interests_list=", ".join(str(i) for i in interests) if interests else "general sightseeing",
+        budget_level=budget_level,
+        budget_guidance=BUDGET_GUIDANCE.get(budget_level, BUDGET_GUIDANCE["mid_range"]),
+        pace=pace,
+        pace_description=PACE_DESCRIPTIONS.get(pace, PACE_DESCRIPTIONS["moderate"]),
+        constraints_list=", ".join(str(c) for c in constraints) if constraints else "none",
+        itinerary=json.dumps(itinerary_response.get("data", {}), indent=2),
+        schema=schema_str,
+    )
+
+    try:
+        llm = _llm(model="claude-haiku-4-5-20251001", temperature=0.0)
+        structured_llm = llm.with_structured_output(ItineraryResponse)
+        patched: ItineraryResponse = structured_llm.invoke([HumanMessage(content=prompt)])
+        patched_response = {"type": "itinerary", "data": patched.model_dump()}
+        return {
+            **state,
+            "final_response": patched_response,
+            "itinerary_response": patched_response,
+        }
+    except Exception as exc:
+        logger.warning("personalization_check_node failed (%s), using original", exc)
+        return state
+
+
 def respond_to_user_node(state: dict) -> dict:
     """Append the assistant message to chat history."""
     final_response = state.get("final_response")
@@ -515,7 +563,16 @@ def build_graph():
     )
     workflow.add_edge("ask_clarification", END)
     workflow.add_edge("search_with_tavily", "generate_response")
-    workflow.add_edge("generate_response", "respond_to_user")
+    workflow.add_node("personalization_check", personalization_check_node)
+    workflow.add_conditional_edges(
+        "generate_response",
+        should_check_personalization,
+        {
+            "personalization_check": "personalization_check",
+            "respond_to_user": "respond_to_user",
+        },
+    )
+    workflow.add_edge("personalization_check", "respond_to_user")
     workflow.add_edge("respond_to_user", END)
 
     return workflow.compile()
