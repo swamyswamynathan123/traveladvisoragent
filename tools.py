@@ -43,7 +43,7 @@ def tavily_search(
             TavilyResult(
                 title=item.get("title", ""),
                 url=item.get("url", ""),
-                content_snippet=item.get("content", "")[:1000],
+                content_snippet=item.get("content", "")[:500],
                 source_type=item.get("type", "web"),
             )
             for item in raw.get("results", [])

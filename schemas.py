@@ -162,6 +162,7 @@ class TravelAgentState(BaseModel):
     tavily_context: List[dict] = Field(default_factory=list)
     draft: Optional[str] = None
     final_response: Optional[dict] = None
+    itinerary_response: Optional[dict] = None
     tool_call_count: int = 0
     needs_clarification: bool = False
     clarification_questions: List[str] = Field(default_factory=list)

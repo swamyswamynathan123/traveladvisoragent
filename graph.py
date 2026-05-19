@@ -35,6 +35,11 @@ BUDGET_GUIDANCE = {
 }
 
 
+def _safe_format_str(value: str) -> str:
+    """Escape curly braces in user-supplied strings before prompt .format() interpolation."""
+    return str(value).replace("{", "{{").replace("}", "}}")
+
+
 # ── state factory ─────────────────────────────────────────────────────────────
 
 def build_initial_state() -> dict:
@@ -101,7 +106,7 @@ def collect_requirements_node(state: dict) -> dict:
         return state
 
     latest = messages[-1].get("content", "")
-    prompt = INTENT_DETECTION_PROMPT.format(user_message=latest)
+    prompt = INTENT_DETECTION_PROMPT.format(user_message=_safe_format_str(latest))
 
     try:
         structured_llm = _llm().with_structured_output(IntentDetectionOutput)
@@ -381,8 +386,8 @@ def _generate_itinerary(state: dict) -> dict:
         hotel_context=_format_hotel_context(state.get("tavily_context", [])),
         pace_description=PACE_DESCRIPTIONS.get(pace, PACE_DESCRIPTIONS["moderate"]),
         budget_guidance=BUDGET_GUIDANCE.get(budget_level, BUDGET_GUIDANCE["mid_range"]),
-        interests_list=", ".join(str(i) for i in interests) if interests else "general sightseeing",
-        constraints_list=", ".join(str(c) for c in constraints) if constraints else "none",
+        interests_list=_safe_format_str(", ".join(str(i) for i in interests) if interests else "general sightseeing"),
+        constraints_list=_safe_format_str(", ".join(str(c) for c in constraints) if constraints else "none"),
         budget_level=budget_level,
         pace=pace,
         schema=schema_str,
@@ -488,12 +493,12 @@ def personalization_check_node(state: dict) -> dict:
 
     schema_str = json.dumps(ItineraryResponse.model_json_schema(), indent=2)
     prompt = PERSONALIZATION_CHECK_PROMPT.format(
-        interests_list=", ".join(str(i) for i in interests) if interests else "general sightseeing",
+        interests_list=_safe_format_str(", ".join(str(i) for i in interests) if interests else "general sightseeing"),
         budget_level=budget_level,
         budget_guidance=BUDGET_GUIDANCE.get(budget_level, BUDGET_GUIDANCE["mid_range"]),
         pace=pace,
         pace_description=PACE_DESCRIPTIONS.get(pace, PACE_DESCRIPTIONS["moderate"]),
-        constraints_list=", ".join(str(c) for c in constraints) if constraints else "none",
+        constraints_list=_safe_format_str(", ".join(str(c) for c in constraints) if constraints else "none"),
         itinerary=json.dumps(itinerary_response.get("data", {}), indent=2),
         schema=schema_str,
     )

@@ -62,7 +62,7 @@ schemas.py  ←  tools.py  ←  prompts.py  ←  graph.py  ←  app.py
   1. `collect_requirements_node` — calls `gpt-4o-mini` to parse intent and extract `trip_request` / `travel_question` from the latest message
   2. `validate_inputs_node` — pure logic, sets `needs_clarification`
   3. conditional edge via `should_clarify()` → either `ask_clarification_node` or `search_with_tavily_node`
-  4. `search_with_tavily_node` — calls `tavily_search()` up to `MAX_TOOL_CALLS=6` times, accumulates results into `state["tavily_context"]`
+  4. `search_with_tavily_node` — calls `tavily_search()` up to `MAX_TOOL_CALLS=9` times, accumulates results into `state["tavily_context"]`
   5. `generate_response_node` — calls `gpt-4o` with `llm.with_structured_output(PydanticModel)`; on failure retries once via `_retry_with_repair()`
   6. `respond_to_user_node` — appends the assistant message to `state["messages"]`
 
