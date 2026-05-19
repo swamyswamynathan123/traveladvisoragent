@@ -109,7 +109,7 @@ def collect_requirements_node(state: dict) -> dict:
     prompt = INTENT_DETECTION_PROMPT.format(user_message=_safe_format_str(latest))
 
     try:
-        structured_llm = _llm().with_structured_output(IntentDetectionOutput)
+        structured_llm = _llm().with_structured_output(IntentDetectionOutput, method="function_calling")
         parsed: IntentDetectionOutput = structured_llm.invoke(
             [SystemMessage(content=SYSTEM_PROMPT), HumanMessage(content=prompt)]
         )
@@ -193,7 +193,7 @@ def ask_clarification_node(state: dict) -> dict:
     )
 
     try:
-        structured_llm = _llm(temperature=0.3).with_structured_output(ClarificationResponse)
+        structured_llm = _llm(temperature=0.3).with_structured_output(ClarificationResponse, method="function_calling")
         data: ClarificationResponse = structured_llm.invoke(
             [SystemMessage(content=SYSTEM_PROMPT), HumanMessage(content=prompt)]
         )
@@ -393,7 +393,7 @@ def _generate_itinerary(state: dict) -> dict:
         schema=schema_str,
     )
     try:
-        structured_llm = llm.with_structured_output(ItineraryResponse)
+        structured_llm = llm.with_structured_output(ItineraryResponse, method="function_calling")
         response: ItineraryResponse = structured_llm.invoke(
             [SystemMessage(content=SYSTEM_PROMPT), HumanMessage(content=prompt)]
         )
@@ -431,7 +431,7 @@ def _generate_answer(state: dict) -> dict:
         schema=schema_str,
     )
     try:
-        structured_llm = llm.with_structured_output(QuestionResponse)
+        structured_llm = llm.with_structured_output(QuestionResponse, method="function_calling")
         response: QuestionResponse = structured_llm.invoke(
             [SystemMessage(content=SYSTEM_PROMPT), HumanMessage(content=prompt)]
         )
@@ -452,7 +452,7 @@ def _retry_with_repair(llm, state: dict, resp_type: str, schema_cls, schema_str:
         schema=schema_str,
     )
     try:
-        structured_llm = llm.with_structured_output(schema_cls)
+        structured_llm = llm.with_structured_output(schema_cls, method="function_calling")
         response = structured_llm.invoke([HumanMessage(content=repair_prompt)])
         response_payload = {"type": resp_type, "data": response.model_dump()}
         extra = {"itinerary_response": response_payload} if resp_type == "itinerary" else {}
@@ -505,7 +505,7 @@ def personalization_check_node(state: dict) -> dict:
 
     try:
         llm = _llm(model="gpt-4o-mini", temperature=0.0)
-        structured_llm = llm.with_structured_output(ItineraryResponse)
+        structured_llm = llm.with_structured_output(ItineraryResponse, method="function_calling")
         patched: ItineraryResponse = structured_llm.invoke([HumanMessage(content=prompt)])
         patched_response = {"type": "itinerary", "data": patched.model_dump()}
         return {
