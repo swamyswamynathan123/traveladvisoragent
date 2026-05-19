@@ -371,7 +371,7 @@ def generate_response_node(state: dict) -> dict:
 
 
 def _generate_itinerary(state: dict) -> dict:
-    llm = _llm(model="claude-sonnet-4-6", temperature=0.3)
+    llm = _llm(model="gpt-4o", temperature=0.3)
     schema_str = json.dumps(ItineraryResponse.model_json_schema(), indent=2)
     trip_req = state.get("trip_request") or {}
     pace = trip_req.get("pace", "moderate")
@@ -410,7 +410,7 @@ def _generate_itinerary(state: dict) -> dict:
 
 
 def _generate_answer(state: dict) -> dict:
-    llm = _llm(model="claude-sonnet-4-6", temperature=0.3)
+    llm = _llm(model="gpt-4o", temperature=0.3)
     schema_str = json.dumps(QuestionResponse.model_json_schema(), indent=2)
     q_data = state.get("travel_question") or {}
     trip_req = state.get("trip_request") or {}
@@ -504,7 +504,7 @@ def personalization_check_node(state: dict) -> dict:
     )
 
     try:
-        llm = _llm(model="claude-haiku-4-5-20251001", temperature=0.0)
+        llm = _llm(model="gpt-4o-mini", temperature=0.0)
         structured_llm = llm.with_structured_output(ItineraryResponse)
         patched: ItineraryResponse = structured_llm.invoke([HumanMessage(content=prompt)])
         patched_response = {"type": "itinerary", "data": patched.model_dump()}
