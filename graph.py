@@ -365,7 +365,7 @@ def generate_response_node(state: dict) -> dict:
 
 
 def _generate_itinerary(state: dict) -> dict:
-    llm = _llm(model="gpt-4o", temperature=0.3)
+    llm = _llm(model="claude-sonnet-4-6", temperature=0.3)
     schema_str = json.dumps(ItineraryResponse.model_json_schema(), indent=2)
     trip_req = state.get("trip_request") or {}
     pace = trip_req.get("pace", "moderate")
@@ -404,7 +404,7 @@ def _generate_itinerary(state: dict) -> dict:
 
 
 def _generate_answer(state: dict) -> dict:
-    llm = _llm(model="gpt-4o", temperature=0.3)
+    llm = _llm(model="claude-sonnet-4-6", temperature=0.3)
     schema_str = json.dumps(QuestionResponse.model_json_schema(), indent=2)
     q_data = state.get("travel_question") or {}
     trip_req = state.get("trip_request") or {}
