@@ -8,7 +8,7 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from schemas import ItineraryResponse, QuestionResponse, ClarificationResponse
-from tools import tavily_search, tavily_search_advanced, tripadvisor_search
+from tools import tavily_search, tavily_search_advanced, tripadvisor_search, expedia_hotel_search
 from prompts import (
     SYSTEM_PROMPT,
     INTENT_DETECTION_PROMPT,
@@ -210,18 +210,19 @@ def ask_clarification_node(state: dict) -> dict:
 
 
 def search_with_tavily_node(state: dict) -> dict:
-    """Run Tavily searches to gather travel information (max MAX_TOOL_CALLS total)."""
+    """Run searches in parallel to gather travel information (max MAX_TOOL_CALLS total)."""
+    from concurrent.futures import ThreadPoolExecutor
+    import re
+
     intent = state.get("intent", "unknown")
     call_count: int = state.get("tool_call_count", 0)
 
     if call_count >= MAX_TOOL_CALLS:
-        logger.warning("MAX_TOOL_CALLS reached — skipping Tavily search")
+        logger.warning("MAX_TOOL_CALLS reached — skipping search")
         return state
 
-    import re
-
-    # Each entry is (query, search_fn) — TripAdvisor for restaurants/attractions, Tavily for everything else
-    search_tasks: list[tuple[str, object]] = []
+    # Each entry is (fn, kwargs, is_hotel_search)
+    search_tasks: list[tuple] = []
 
     if intent == "planning":
         trip_req = state.get("trip_request") or {}
@@ -229,14 +230,18 @@ def search_with_tavily_node(state: dict) -> dict:
         interests = trip_req.get("interests", [])
         constraints = [str(c).lower() for c in trip_req.get("constraints", [])]
         constraint_text = " ".join(constraints)
+        budget_level = trip_req.get("budget_level", "mid_range")
+        start_date = trip_req.get("start_date", "")
 
         search_tasks += [
-            (f"{dest} top attractions things to do", tripadvisor_search),
-            (f"{dest} travel tips transportation budget", tavily_search),
+            (tripadvisor_search, {"query": f"{dest} top attractions things to do", "max_results": 5}, False),
+            (tavily_search, {"query": f"{dest} travel tips transportation budget", "max_results": 5}, False),
         ]
         if interests:
             interests_str = " ".join(str(i) for i in interests[:2])
-            search_tasks.append((f"{dest} {interests_str} recommendations", tripadvisor_search))
+            search_tasks.append(
+                (tripadvisor_search, {"query": f"{dest} {interests_str} recommendations", "max_results": 5}, False)
+            )
 
         dietary_keywords = ["vegetarian", "vegan", "halal", "kosher", "gluten-free", "dairy-free"]
         cuisine_keywords = ["indian", "italian", "japanese", "chinese", "mexican", "thai",
@@ -251,19 +256,27 @@ def search_with_tavily_node(state: dict) -> dict:
             food_label = " ".join(filter(None, [cuisine_type, diet_type])) or "best"
             for city in search_cities:
                 search_tasks.append((
-                    f"{food_label} restaurants {city} recommended named list 2024",
                     tavily_search_advanced,
+                    {"query": f"{food_label} restaurants {city} recommended named list 2024", "max_results": 5},
+                    False,
                 ))
 
-        # Hotel searches — one per city, tripadvisor is reliable for hotel pages
-        budget_level = trip_req.get("budget_level", "mid_range")
         city_names = [c.strip() for c in re.split(r"[,+&]|\band\b", dest, flags=re.IGNORECASE) if c.strip()]
         hotel_cities = city_names if city_names else [dest]
         for city in hotel_cities[:3]:
             search_tasks.append((
-                f"best {budget_level.replace('_', ' ')} hotels {city} recommended 2024",
                 tripadvisor_search,
+                {"query": f"best {budget_level.replace('_', ' ')} hotels {city} recommended 2024", "max_results": 5},
+                False,
             ))
+
+        if start_date:
+            for city in hotel_cities[:2]:
+                search_tasks.append((
+                    expedia_hotel_search,
+                    {"destination": city, "check_in": start_date, "budget_level": budget_level},
+                    True,
+                ))
 
     elif intent == "question":
         q = (state.get("travel_question") or {}).get("question", "")
@@ -279,43 +292,44 @@ def search_with_tavily_node(state: dict) -> dict:
         is_restaurant_q = any(kw in q.lower() for kw in restaurant_kw)
 
         if is_restaurant_q:
-            # Build clean keyword queries — don't pass the full question to the search engine
             cuisine_type = next((kw for kw in cuisine_kw if kw in q.lower()), "")
             diet_type = next((kw for kw in ["vegetarian", "vegan", "halal", "kosher"] if kw in q.lower()), "")
             food_label = " ".join(filter(None, [cuisine_type, diet_type])) or "popular"
-
-            # Collect cities from destination + any cities named in the question
             dest_cities = [c.strip() for c in re.split(r"[,+&]|\band\b", dest, flags=re.IGNORECASE) if c.strip()] if dest else []
             q_only_cities = [c for c in dest_cities if c.lower() in q.lower()]
-            search_cities = q_only_cities if q_only_cities else dest_cities
-            search_cities = search_cities[:3] if search_cities else []
-
+            search_cities = (q_only_cities or dest_cities)[:3]
             if search_cities:
                 for city in search_cities:
                     search_tasks.append((
-                        f"best {food_label} restaurants {city} 2024 recommended",
                         tavily_search_advanced,
+                        {"query": f"best {food_label} restaurants {city} 2024 recommended", "max_results": 5},
+                        False,
                     ))
             else:
                 enriched_q = f"{food_label} restaurants {dest or q}".strip()
-                search_tasks.append((enriched_q, tavily_search_advanced))
+                search_tasks.append((tavily_search_advanced, {"query": enriched_q, "max_results": 5}, False))
         else:
             enriched_q = f"{q} {dest}".strip() if dest and dest.lower() not in q.lower() else q
-            search_tasks.append((enriched_q, tavily_search))
+            search_tasks.append((tavily_search, {"query": enriched_q, "max_results": 5}, False))
             if start_date and dest:
-                search_tasks.append((f"{dest} weather {start_date}", tavily_search))
-
+                search_tasks.append((tavily_search, {"query": f"{dest} weather {start_date}", "max_results": 5}, False))
     else:
         return state
 
-    budget = MAX_TOOL_CALLS - call_count
-    search_tasks = search_tasks[:budget]
+    # Cap to remaining budget
+    search_tasks = search_tasks[:MAX_TOOL_CALLS - call_count]
+
+    def _run_task(task):
+        fn, kwargs, _ = task
+        return fn(**kwargs)
 
     accumulated: list = list(state.get("tavily_context", []))
     new_call_count = call_count
 
-    for query, search_fn in search_tasks:
-        result = search_fn(query=query, max_results=5)
+    with ThreadPoolExecutor(max_workers=min(len(search_tasks), 9)) as executor:
+        results = list(executor.map(_run_task, search_tasks))
+
+    for result in results:
         new_call_count += 1
         if result.tool_status == "ok":
             for r in result.results:
@@ -324,7 +338,7 @@ def search_with_tavily_node(state: dict) -> dict:
                     "url": r.url,
                     "content_snippet": r.content_snippet,
                     "source_type": r.source_type,
-                    "query": query,
+                    "query": result.query,
                 })
 
     return {**state, "tavily_context": accumulated, "tool_call_count": new_call_count}

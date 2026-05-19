@@ -272,6 +272,55 @@ def test_collect_requirements_empty_messages_returns_state():
 
 # ── ask_clarification_node ───────────────────────────────────────────────────
 
+def test_search_node_fires_all_queries_and_accumulates_results():
+    from graph import search_with_tavily_node
+    from schemas import TavilySearchOutput, TavilyResult
+
+    fired = []
+
+    def recording_fn(**kwargs):
+        fired.append(kwargs.get("query", kwargs.get("destination", "?")))
+        return TavilySearchOutput(
+            results=[TavilyResult(title="R", url="u", content_snippet="s")],
+            query=str(kwargs.get("query", "hotel")),
+            tool_status="ok",
+        )
+
+    state = _planning_state()  # destination=Tokyo, no start_date
+    state["tool_call_count"] = 0
+
+    with patch("graph.tavily_search", side_effect=recording_fn), \
+         patch("graph.tripadvisor_search", side_effect=recording_fn), \
+         patch("graph.tavily_search_advanced", side_effect=recording_fn):
+        result = search_with_tavily_node(state)
+
+    assert len(fired) >= 3  # at minimum: attractions + travel tips + hotels
+    assert len(result["tavily_context"]) == len(fired)
+    assert result["tool_call_count"] == len(fired)
+
+
+def test_search_node_calls_hotel_search_when_start_date_set():
+    from graph import search_with_tavily_node
+    from schemas import TavilySearchOutput
+
+    state = _planning_state()
+    state["trip_request"]["start_date"] = "2026-08-01"
+    state["tool_call_count"] = 0
+
+    mock_out = TavilySearchOutput(results=[], query="q", tool_status="ok")
+
+    with patch("graph.tavily_search", return_value=mock_out), \
+         patch("graph.tripadvisor_search", return_value=mock_out), \
+         patch("graph.tavily_search_advanced", return_value=mock_out), \
+         patch("graph.expedia_hotel_search", return_value=mock_out) as mock_hotel:
+        search_with_tavily_node(state)
+
+    mock_hotel.assert_called_once()
+    call_kwargs = mock_hotel.call_args.kwargs
+    assert call_kwargs["destination"] == "Tokyo"
+    assert call_kwargs["check_in"] == "2026-08-01"
+
+
 def test_ask_clarification_node_returns_clarification_response():
     from graph import ask_clarification_node
     from schemas import ClarificationResponse
