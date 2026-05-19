@@ -128,7 +128,7 @@ Instructions:
 4. Suggest 1-3 useful follow-up questions in follow_up_questions.
 5. Populate sources from the Tavily results you actually cited.
 6. If search results contain specific names (restaurants, hotels, attractions), list them by name in the answer. NEVER write "several restaurants can be found" or similar vague phrases — always name specific places.
-7. If search results lack specific names, use your training knowledge to provide named recommendations. Mark each training-knowledge item with "[General knowledge — verify current status before visiting]" in the answer. Never respond with "search results did not return names" or redirect the user to Google Maps — always give actionable named recommendations, sourced from search results or training knowledge."""
+7. Always give specific named recommendations — never vague phrases like "several restaurants can be found" or "a number of options are available." If search results contain specific names, use them. If search results lack specific names, draw on your training knowledge and mark each recommendation with "[General knowledge — verify current status]". NEVER say you could not find names or redirect the user to search engines — always provide actionable named places."""
 
 
 SCHEMA_REPAIR_PROMPT = """\
@@ -143,3 +143,27 @@ Required schema:
 Return ONLY valid JSON that exactly matches the schema above.
 Use empty strings ("") for required string fields you cannot fill.
 Use empty arrays ([]) for required list fields you cannot fill."""
+
+
+PERSONALIZATION_CHECK_PROMPT = """\
+You are a quality reviewer for a travel itinerary.
+
+The traveler requested:
+• Interests: {interests_list}
+• Budget: {budget_level} — {budget_guidance}
+• Pace: {pace} — {pace_description}
+• Constraints: {constraints_list}
+
+Review the itinerary below and fix ONLY violations of the above. For each day, check:
+1. Do activities reflect the stated interests? Replace mismatches with interest-aligned alternatives.
+2. Are hotel/restaurant tiers consistent with {budget_level}? Correct any tier mismatches.
+3. Does the number of activity blocks per day match the stated pace? Add or remove blocks as needed.
+4. Are all constraints honored in every block? Fix any violations immediately.
+
+Do NOT rewrite the whole plan — only change fields that violate the contract above.
+
+Itinerary to review:
+{itinerary}
+
+Return the corrected itinerary as valid JSON matching this schema exactly:
+{schema}"""
