@@ -568,16 +568,7 @@ def build_graph():
     )
     workflow.add_edge("ask_clarification", END)
     workflow.add_edge("search_with_tavily", "generate_response")
-    workflow.add_node("personalization_check", personalization_check_node)
-    workflow.add_conditional_edges(
-        "generate_response",
-        should_check_personalization,
-        {
-            "personalization_check": "personalization_check",
-            "respond_to_user": "respond_to_user",
-        },
-    )
-    workflow.add_edge("personalization_check", "respond_to_user")
+    workflow.add_edge("generate_response", "respond_to_user")
     workflow.add_edge("respond_to_user", END)
 
     return workflow.compile()

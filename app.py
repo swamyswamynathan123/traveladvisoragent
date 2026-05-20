@@ -1,6 +1,9 @@
 from __future__ import annotations
+import json
 import logging
 
+import pandas as pd
+import pydeck as pdk
 import streamlit as st
 from dotenv import load_dotenv
 
@@ -163,6 +166,52 @@ def _render_itinerary(data: dict) -> None:
             if snippet:
                 st.caption(snippet)
 
+    _render_map(data)
+
+
+def _render_map(data: dict) -> None:
+    _DAY_COLORS = [
+        [255, 87, 51], [52, 152, 219], [39, 174, 96], [155, 89, 182],
+        [243, 156, 18], [26, 188, 156], [231, 76, 60], [52, 73, 94],
+    ]
+    points = []
+    for day in data.get("itinerary", []):
+        day_num = day.get("day_number", 1)
+        color = _DAY_COLORS[(day_num - 1) % len(_DAY_COLORS)]
+        for block in day.get("blocks", []):
+            lat = block.get("latitude")
+            lon = block.get("longitude")
+            if lat and lon:
+                points.append({
+                    "lat": lat, "lon": lon,
+                    "label": f"Day {day_num}: {block.get('activity', '')}",
+                    "color": color,
+                })
+    if not points:
+        return
+    df = pd.DataFrame(points)
+    lat_range = df["lat"].max() - df["lat"].min()
+    lon_range = df["lon"].max() - df["lon"].min()
+    spread = max(lat_range, lon_range)
+    zoom = 5 if spread > 5 else 7 if spread > 2 else 11 if spread > 0.3 else 13
+    st.subheader("🗺️ Map")
+    st.pydeck_chart(pdk.Deck(
+        layers=[pdk.Layer(
+            "ScatterplotLayer",
+            data=df,
+            get_position="[lon, lat]",
+            get_color="color",
+            get_radius=300,
+            pickable=True,
+        )],
+        initial_view_state=pdk.ViewState(
+            latitude=df["lat"].mean(),
+            longitude=df["lon"].mean(),
+            zoom=zoom,
+        ),
+        tooltip={"text": "{label}"},
+    ))
+
 
 def _render_answer(data: dict) -> None:
     st.subheader("💬 Travel Answer")
@@ -223,7 +272,6 @@ def _run_graph(state: dict) -> dict:
         "ask_clarification": "💬 Preparing clarification...",
         "search_with_tavily": "🔍 Searching travel information...",
         "generate_response": "✍️ Generating response...",
-        "personalization_check": "🎯 Reviewing personalization...",
         "respond_to_user": "📝 Wrapping up...",
     }
     result = state
@@ -306,6 +354,36 @@ with st.sidebar:
     if st.button("🔄 Reset", use_container_width=True):
         st.session_state.agent_state = build_initial_state()
         st.session_state.show_refine_input = False
+        st.rerun()
+
+    # ── cost counter ──────────────────────────────────────────────────────────
+    st.divider()
+    call_count = st.session_state.agent_state.get("tool_call_count", 0)
+    max_calls = 9
+    st.caption(f"Searches used: {call_count} / {max_calls}")
+    st.progress(min(call_count / max_calls, 1.0))
+    if call_count > 0:
+        est = call_count * 0.001 + 0.06  # ~$0.001/Tavily + ~$0.06 GPT-4o
+        st.caption(f"Est. cost this session: ~${est:.2f}")
+
+    # ── save / load ───────────────────────────────────────────────────────────
+    st.divider()
+    _itinerary = st.session_state.agent_state.get("itinerary_response")
+    if _itinerary:
+        _dest = _itinerary.get("data", {}).get("destination", "itinerary")
+        _fname = f"{_dest.replace(' ', '_').lower()}_itinerary.json"
+        st.download_button(
+            "💾 Save Itinerary",
+            data=json.dumps(_itinerary, indent=2),
+            file_name=_fname,
+            mime="application/json",
+            use_container_width=True,
+        )
+    _uploaded = st.file_uploader("📂 Load saved itinerary", type="json", label_visibility="collapsed")
+    if _uploaded:
+        _loaded = json.loads(_uploaded.read())
+        st.session_state.agent_state["final_response"] = _loaded
+        st.session_state.agent_state["itinerary_response"] = _loaded
         st.rerun()
 
 # ── generate itinerary ────────────────────────────────────────────────────────

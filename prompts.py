@@ -89,6 +89,7 @@ For EVERY activity block:
 4. Set duration_hours to the recommended time at the venue
 5. Include: best arrival time (e.g. "arrive before 9am to avoid queues"), book-ahead flag
 6. For dining blocks: use specific restaurant names from search results. If none available, write "Find a [cuisine] restaurant near [neighborhood]" — never vague descriptions or "no specific details available"
+7. Set latitude and longitude to the GPS coordinates of the specific venue so it can be plotted on a map. Use your training knowledge for well-known venues.
 
 === LOGISTICS RULES ===
 logistics_notes must cover:

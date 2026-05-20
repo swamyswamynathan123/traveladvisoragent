@@ -65,6 +65,8 @@ class TimeBlock(BaseModel):
     location: Optional[str] = None
     notes: Optional[str] = None
     duration_hours: Optional[float] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
 
 
 class DayPlan(BaseModel):
