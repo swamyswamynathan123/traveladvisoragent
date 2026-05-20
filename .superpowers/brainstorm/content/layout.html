@@ -1,0 +1,106 @@
+<h2>Where should Live Flight & Hotel Search appear?</h2>
+<p class="subtitle">After the itinerary is generated, where do the Tavily-powered search results show up?</p>
+
+<div class="cards">
+
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup" style="min-height:220px;font-size:11px">
+        <div class="mockup-header">Travel Advisor</div>
+        <div class="mockup-body" style="display:flex;gap:8px;padding:8px">
+          <div style="width:110px;flex-shrink:0;background:#1e2130;border-radius:4px;padding:6px;color:#aaa;font-size:10px">
+            <div style="color:#7c8cf8;margin-bottom:4px;font-weight:bold">✈ Destination</div>
+            <div style="background:#252840;border-radius:3px;padding:3px;margin-bottom:3px">Madrid</div>
+            <div style="color:#7c8cf8;margin-bottom:2px;font-weight:bold">📅 Dates</div>
+            <div style="background:#252840;border-radius:3px;padding:3px;margin-bottom:3px">Jun 1 – Jun 7</div>
+            <div style="color:#7c8cf8;margin-bottom:2px;font-weight:bold">💰 Budget</div>
+            <div style="background:#252840;border-radius:3px;padding:3px;margin-bottom:6px">Mid-range</div>
+            <div style="background:#4c5bd4;color:white;border-radius:3px;padding:4px;text-align:center;margin-bottom:4px">🗺 Itinerary</div>
+            <div style="background:#2d7a4f;color:white;border-radius:3px;padding:4px;text-align:center;margin-bottom:4px">✈ Flights</div>
+            <div style="background:#2d7a4f;color:white;border-radius:3px;padding:4px;text-align:center">🏨 Hotels</div>
+          </div>
+          <div style="flex:1;background:#252840;border-radius:4px;padding:6px;color:#ccc;font-size:10px">
+            <div style="color:#7c8cf8;font-weight:bold;margin-bottom:4px">✈ Live Flight Search</div>
+            <div style="background:#1e2130;border-radius:3px;padding:4px;margin-bottom:3px">
+              <span style="color:#4ade80">🛫</span> NYC → Madrid · Jun 1 · $487 · Iberia
+            </div>
+            <div style="background:#1e2130;border-radius:3px;padding:4px;margin-bottom:3px">
+              <span style="color:#4ade80">🛫</span> NYC → Madrid · Jun 1 · $512 · Delta
+            </div>
+            <div style="color:#7c8cf8;font-weight:bold;margin:6px 0 4px">🏨 Live Hotel Search</div>
+            <div style="background:#1e2130;border-radius:3px;padding:4px;margin-bottom:3px">
+              <span style="color:#fbbf24">★</span> Hotel Midtown · $142/night
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Sidebar Tabs</h3>
+      <p>Flights and Hotels get their own sidebar buttons, next to the existing Itinerary view. Clicking switches the main panel to search results.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup" style="min-height:220px;font-size:11px">
+        <div class="mockup-header">Travel Advisor</div>
+        <div class="mockup-body" style="display:flex;gap:8px;padding:8px">
+          <div style="width:110px;flex-shrink:0;background:#1e2130;border-radius:4px;padding:6px;color:#aaa;font-size:10px">
+            <div style="color:#7c8cf8;margin-bottom:4px;font-weight:bold">✈ Destination</div>
+            <div style="background:#252840;border-radius:3px;padding:3px;margin-bottom:3px">Madrid</div>
+            <div style="background:#4c5bd4;color:white;border-radius:3px;padding:4px;text-align:center;margin-bottom:4px">🗺 Generate</div>
+          </div>
+          <div style="flex:1;background:#252840;border-radius:4px;padding:6px;color:#ccc;font-size:10px">
+            <div style="border-bottom:1px solid #333;padding-bottom:4px;margin-bottom:6px;display:flex;gap:6px">
+              <span style="background:#4c5bd4;color:white;border-radius:3px;padding:2px 6px">📋 Itinerary</span>
+              <span style="background:#1e2130;color:#aaa;border-radius:3px;padding:2px 6px">✈ Flights</span>
+              <span style="background:#1e2130;color:#aaa;border-radius:3px;padding:2px 6px">🏨 Hotels</span>
+              <span style="background:#1e2130;color:#aaa;border-radius:3px;padding:2px 6px">🧳 Packing</span>
+            </div>
+            <div style="color:#7c8cf8;font-weight:bold;margin-bottom:4px">Day 1 — Arrival & Old Town</div>
+            <div style="background:#1e2130;border-radius:3px;padding:4px;margin-bottom:2px;font-size:9px">🌅 Morning — Plaza Mayor</div>
+            <div style="background:#1e2130;border-radius:3px;padding:4px;margin-bottom:2px;font-size:9px">☀ Afternoon — Prado Museum</div>
+            <div style="background:#1e2130;border-radius:3px;padding:4px;font-size:9px">🌙 Evening — Tapas in La Latina</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — Tabs in Main Panel (Recommended)</h3>
+      <p>Flights and Hotels become tabs alongside Itinerary, Packing, etc. in the main content area. Cleanest integration, keeps sidebar focused on trip parameters.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup" style="min-height:220px;font-size:11px">
+        <div class="mockup-header">Travel Advisor</div>
+        <div class="mockup-body" style="display:flex;gap:8px;padding:8px">
+          <div style="width:110px;flex-shrink:0;background:#1e2130;border-radius:4px;padding:6px;color:#aaa;font-size:10px">
+            <div style="color:#7c8cf8;margin-bottom:4px;font-weight:bold">✈ Destination</div>
+            <div style="background:#252840;border-radius:3px;padding:3px;margin-bottom:6px">Madrid</div>
+            <div style="background:#4c5bd4;color:white;border-radius:3px;padding:4px;text-align:center">🗺 Generate</div>
+          </div>
+          <div style="flex:1;background:#252840;border-radius:4px;padding:6px;color:#ccc;font-size:10px">
+            <div style="color:#7c8cf8;font-weight:bold;margin-bottom:4px">📋 Itinerary</div>
+            <div style="background:#1e2130;border-radius:3px;padding:4px;margin-bottom:2px;font-size:9px">Day 1 — Arrival & Old Town</div>
+            <div style="background:#1e2130;border-radius:3px;padding:4px;margin-bottom:8px;font-size:9px">Day 2 — Art & Culture</div>
+            <details style="cursor:pointer">
+              <summary style="color:#4ade80;font-weight:bold;font-size:10px;margin-bottom:4px">▶ Live Flights & Hotels (click to search)</summary>
+              <div style="background:#1e2130;border-radius:3px;padding:4px;margin-top:4px;font-size:9px">
+                🛫 NYC → Madrid · $487 · Iberia<br>
+                🏨 Hotel Midtown · $142/night
+              </div>
+            </details>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — Expandable Section Below Itinerary</h3>
+      <p>A collapsible "Live Flights & Hotels" section at the bottom of the itinerary. Lazy — only searches when the user expands it. Minimal UI change.</p>
+    </div>
+  </div>
+
+</div>
