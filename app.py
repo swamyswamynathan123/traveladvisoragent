@@ -1,6 +1,8 @@
 from __future__ import annotations
 import json
 import logging
+from datetime import datetime
+from pathlib import Path
 
 import pandas as pd
 import pydeck as pdk
@@ -8,6 +10,31 @@ import streamlit as st
 from dotenv import load_dotenv
 
 from graph import build_graph, build_initial_state
+
+_HISTORY_FILE = Path(__file__).parent / "itineraries" / "history.json"
+
+
+def _load_history() -> list:
+    if not _HISTORY_FILE.exists():
+        return []
+    try:
+        return json.loads(_HISTORY_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+
+
+def _save_to_history(itinerary_response: dict) -> None:
+    _HISTORY_FILE.parent.mkdir(exist_ok=True)
+    dest = itinerary_response.get("data", {}).get("destination", "Unknown")
+    entry = {
+        "destination": dest,
+        "saved_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "itinerary": itinerary_response,
+    }
+    history = _load_history()
+    # Replace existing entry for same destination, prepend new one, cap at 10
+    history = [entry] + [h for h in history if h.get("destination") != dest]
+    _HISTORY_FILE.write_text(json.dumps(history[:10], indent=2), encoding="utf-8")
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
@@ -386,6 +413,21 @@ with st.sidebar:
         st.session_state.agent_state["itinerary_response"] = _loaded
         st.rerun()
 
+    # ── history ───────────────────────────────────────────────────────────────
+    _history = _load_history()
+    if _history:
+        st.divider()
+        st.caption("Recent trips")
+        for _entry in _history[:5]:
+            _label = f"🗺️ {_entry['destination']}"
+            _help = _entry.get("saved_at", "")
+            if st.button(_label, key=f"hist_{_entry['destination']}_{_help}",
+                         help=_help, use_container_width=True):
+                _it = _entry["itinerary"]
+                st.session_state.agent_state["final_response"] = _it
+                st.session_state.agent_state["itinerary_response"] = _it
+                st.rerun()
+
 # ── generate itinerary ────────────────────────────────────────────────────────
 
 if generate_clicked:
@@ -435,6 +477,8 @@ if generate_clicked:
 
         result_state = _run_graph(new_state)
         st.session_state.agent_state = result_state
+        if result_state.get("itinerary_response"):
+            _save_to_history(result_state["itinerary_response"])
         st.rerun()
 
 # ── refine plan ───────────────────────────────────────────────────────────────
