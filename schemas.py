@@ -165,6 +165,38 @@ class PackingListResponse(BaseModel):
     notes: List[str] = Field(default_factory=list)
 
 
+class FlightResult(BaseModel):
+    airline: str
+    flight_number: str = ""
+    origin: str
+    destination: str
+    duration: str = ""
+    stops: str = ""
+    departure_time: str = ""
+    price_usd: str
+    url: str
+
+
+class FlightResultList(BaseModel):
+    results: List[FlightResult] = Field(default_factory=list)
+
+
+class HotelResult(BaseModel):
+    name: str
+    stars: int = 0
+    neighborhood: str = ""
+    amenities: str = ""
+    rating: str = ""
+    rating_label: str = ""
+    price_per_night: str
+    price_total: str = ""
+    url: str
+
+
+class HotelResultList(BaseModel):
+    results: List[HotelResult] = Field(default_factory=list)
+
+
 class TravelAgentState(BaseModel):
     """Full LangGraph agent state. Serialized as dict when passed to graph."""
     user_profile: Optional[dict] = None

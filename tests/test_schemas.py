@@ -150,3 +150,41 @@ def test_intent_detection_output_defaults():
     assert obj.trip_request is None
     assert obj.travel_question is None
     assert obj.clarification_needed == []
+
+
+def test_flight_result_defaults():
+    from schemas import FlightResult
+    f = FlightResult(airline="Iberia", origin="JFK", destination="MAD", price_usd="$487", url="https://kayak.com")
+    assert f.flight_number == ""
+    assert f.stops == ""
+    assert f.duration == ""
+    assert f.departure_time == ""
+
+
+def test_flight_result_list_wraps_results():
+    from schemas import FlightResult, FlightResultList
+    frl = FlightResultList(results=[
+        FlightResult(airline="Delta", origin="JFK", destination="MAD", price_usd="$512", url="https://delta.com")
+    ])
+    assert len(frl.results) == 1
+    assert frl.results[0].airline == "Delta"
+
+
+def test_hotel_result_defaults():
+    from schemas import HotelResult
+    h = HotelResult(name="Hotel Madrid", price_per_night="€118", url="https://booking.com")
+    assert h.stars == 0
+    assert h.neighborhood == ""
+    assert h.amenities == ""
+    assert h.rating == ""
+    assert h.rating_label == ""
+    assert h.price_total == ""
+
+
+def test_hotel_result_list_wraps_results():
+    from schemas import HotelResult, HotelResultList
+    hrl = HotelResultList(results=[
+        HotelResult(name="Ibis Madrid", price_per_night="€89", url="https://hotels.com")
+    ])
+    assert len(hrl.results) == 1
+    assert hrl.results[0].name == "Ibis Madrid"
