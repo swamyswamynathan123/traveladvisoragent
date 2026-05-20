@@ -153,6 +153,18 @@ class TavilySearchOutput(BaseModel):
     error_message: Optional[str] = None
 
 
+class PackingCategory(BaseModel):
+    category: str
+    items: List[str] = Field(default_factory=list)
+
+
+class PackingListResponse(BaseModel):
+    destination: str
+    trip_summary: str
+    categories: List[PackingCategory] = Field(default_factory=list)
+    notes: List[str] = Field(default_factory=list)
+
+
 class TravelAgentState(BaseModel):
     """Full LangGraph agent state. Serialized as dict when passed to graph."""
     user_profile: Optional[dict] = None

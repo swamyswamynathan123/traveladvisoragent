@@ -1,17 +1,33 @@
 from __future__ import annotations
 import json
 import logging
+import urllib.parse
+import urllib.request
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
 import pandas as pd
 import pydeck as pdk
 import streamlit as st
 from dotenv import load_dotenv
+from langchain_openai import ChatOpenAI
 
 from graph import build_graph, build_initial_state
+from prompts import PACKING_LIST_PROMPT
+from schemas import PackingListResponse
 
 _HISTORY_FILE = Path(__file__).parent / "itineraries" / "history.json"
+
+_ALL_INTERESTS = [
+    "Culture & History", "Food & Dining", "Nature & Outdoors",
+    "Adventure Sports", "Art & Museums", "Shopping",
+    "Nightlife", "Family-Friendly", "Wellness & Spa",
+]
+# normalized key → display label (used when restoring saved trip data)
+_NORM_TO_DISPLAY = {
+    i.lower().replace(" & ", "_").replace(" ", "_"): i for i in _ALL_INTERESTS
+}
 
 
 def _load_history() -> list:
@@ -23,18 +39,160 @@ def _load_history() -> list:
         return []
 
 
-def _save_to_history(itinerary_response: dict) -> None:
+def _save_to_history(itinerary_response: dict, trip_request: dict | None = None) -> None:
     _HISTORY_FILE.parent.mkdir(exist_ok=True)
     dest = itinerary_response.get("data", {}).get("destination", "Unknown")
     entry = {
         "destination": dest,
         "saved_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
         "itinerary": itinerary_response,
+        "trip_request": trip_request or {},
     }
     history = _load_history()
-    # Replace existing entry for same destination, prepend new one, cap at 10
     history = [entry] + [h for h in history if h.get("destination") != dest]
     _HISTORY_FILE.write_text(json.dumps(history[:10], indent=2), encoding="utf-8")
+
+
+def _prefill_sidebar(trip_req: dict) -> None:
+    """Write trip_request values into sidebar widget session-state keys so they render pre-filled."""
+    from datetime import date as _date
+    if trip_req.get("destination"):
+        st.session_state["sb_destination"] = trip_req["destination"]
+    if trip_req.get("duration_days"):
+        st.session_state["sb_duration_days"] = int(trip_req["duration_days"])
+    sd = trip_req.get("start_date")
+    if sd:
+        try:
+            st.session_state["sb_start_date"] = _date.fromisoformat(sd)
+        except (ValueError, TypeError):
+            pass
+    st.session_state["sb_origin"] = trip_req.get("origin") or ""
+    st.session_state["sb_returning_to"] = trip_req.get("returning_to") or ""
+    if trip_req.get("interests"):
+        display = [_NORM_TO_DISPLAY.get(n, n) for n in trip_req["interests"]]
+        st.session_state["sb_interests"] = [d for d in display if d in _ALL_INTERESTS]
+    if trip_req.get("budget_level"):
+        st.session_state["sb_budget_level"] = trip_req["budget_level"]
+    if trip_req.get("pace"):
+        st.session_state["sb_pace"] = trip_req["pace"]
+    if trip_req.get("traveler_type"):
+        st.session_state["sb_traveler_type"] = trip_req["traveler_type"]
+    if trip_req.get("constraints"):
+        st.session_state["sb_constraints"] = ", ".join(trip_req["constraints"])
+
+_WMO_CODES = {
+    0: "Clear sky", 1: "Mainly clear", 2: "Partly cloudy", 3: "Overcast",
+    45: "Fog", 48: "Rime fog", 51: "Light drizzle", 53: "Moderate drizzle",
+    55: "Dense drizzle", 61: "Slight rain", 63: "Moderate rain", 65: "Heavy rain",
+    71: "Slight snow", 73: "Moderate snow", 75: "Heavy snow", 77: "Snow grains",
+    80: "Slight showers", 81: "Moderate showers", 82: "Violent showers",
+    85: "Slight snow showers", 86: "Heavy snow showers",
+    95: "Thunderstorm", 96: "Thunderstorm + hail", 99: "Thunderstorm + heavy hail",
+}
+_WMO_ICONS = {
+    0: "☀️", 1: "🌤️", 2: "⛅", 3: "☁️",
+    45: "🌫️", 48: "🌫️", 51: "🌦️", 53: "🌦️", 55: "🌧️",
+    61: "🌧️", 63: "🌧️", 65: "🌧️", 71: "❄️", 73: "❄️", 75: "❄️", 77: "🌨️",
+    80: "🌦️", 81: "🌦️", 82: "⛈️", 85: "🌨️", 86: "🌨️",
+    95: "⛈️", 96: "⛈️", 99: "⛈️",
+}
+
+
+def _geocode(place: str) -> Optional[tuple[float, float]]:
+    """
+    Return (lat, lon) for a place name using Nominatim.
+    For multi-city destinations (e.g. 'Madrid, Barcelona, Seville'), tries
+    the full string first then each city individually, returning the first match.
+    """
+    import re
+    # Build candidate list: full string, then each split part (for multi-city)
+    parts = [p.strip() for p in re.split(r'[,+&/]|\band\b', place, flags=re.IGNORECASE) if p.strip()]
+    candidates = [place] if len(parts) > 1 else []
+    candidates += parts
+
+    for candidate in candidates:
+        try:
+            encoded = urllib.parse.quote_plus(candidate)
+            url = f"https://nominatim.openstreetmap.org/search?q={encoded}&format=json&limit=1"
+            req = urllib.request.Request(url, headers={"User-Agent": "TravelAdvisorAgent/1.0"})
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                results = json.loads(resp.read())
+            if results:
+                return float(results[0]["lat"]), float(results[0]["lon"])
+        except Exception:
+            pass
+    return None
+
+
+def _fetch_weather(lat: float, lon: float, start_date: str, num_days: int) -> list[dict]:
+    """
+    Call Open-Meteo for daily forecasts. Returns list of dicts keyed by date.
+    Only works for dates within the 16-day forecast window.
+    """
+    try:
+        from datetime import date, timedelta
+        start = date.fromisoformat(start_date)
+        end = start + timedelta(days=num_days - 1)
+        url = (
+            f"https://api.open-meteo.com/v1/forecast"
+            f"?latitude={lat}&longitude={lon}"
+            f"&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum"
+            f"&start_date={start}&end_date={end}"
+            f"&timezone=auto"
+        )
+        with urllib.request.urlopen(url, timeout=8) as resp:
+            data = json.loads(resp.read())
+        daily = data.get("daily", {})
+        dates = daily.get("time", [])
+        codes = daily.get("weathercode", [])
+        t_max = daily.get("temperature_2m_max", [])
+        t_min = daily.get("temperature_2m_min", [])
+        precip = daily.get("precipitation_sum", [])
+        return [
+            {
+                "date": dates[i],
+                "code": codes[i] if i < len(codes) else 0,
+                "t_max": t_max[i] if i < len(t_max) else None,
+                "t_min": t_min[i] if i < len(t_min) else None,
+                "precip": precip[i] if i < len(precip) else None,
+            }
+            for i in range(len(dates))
+        ]
+    except Exception:
+        return []
+
+
+def _generate_packing_list(itinerary_data: dict) -> Optional[PackingListResponse]:
+    """Call GPT-4o to generate a packing list for the current itinerary."""
+    try:
+        activities = []
+        for day in itinerary_data.get("itinerary", [])[:3]:
+            for block in day.get("blocks", []):
+                act = block.get("activity", "")
+                if act:
+                    activities.append(act)
+        activities_summary = "; ".join(activities[:9]) or "general sightseeing"
+
+        trip_req = st.session_state.agent_state.get("trip_request") or {}
+        schema_json = json.dumps(PackingListResponse.model_json_schema(), indent=2)
+        prompt_text = PACKING_LIST_PROMPT.format(
+            destination=itinerary_data.get("destination", "Unknown"),
+            duration=itinerary_data.get("duration", ""),
+            start_date=trip_req.get("start_date") or "Not specified",
+            traveler_type=itinerary_data.get("traveler_type") or trip_req.get("traveler_type", "solo"),
+            interests=", ".join(trip_req.get("interests", [])) or "general sightseeing",
+            budget_level=trip_req.get("budget_level", "mid_range"),
+            constraints=", ".join(trip_req.get("constraints", [])) or "none",
+            activities_summary=activities_summary,
+            schema=schema_json,
+        )
+        llm = ChatOpenAI(model="gpt-4o", temperature=0.3)
+        structured = llm.with_structured_output(PackingListResponse, method="function_calling")
+        return structured.invoke(prompt_text)
+    except Exception as exc:
+        logging.warning("Packing list generation failed: %s", exc)
+        return None
+
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
@@ -54,11 +212,15 @@ if "compiled_graph" not in st.session_state:
     st.session_state.compiled_graph = build_graph()
 if "show_refine_input" not in st.session_state:
     st.session_state.show_refine_input = False
+if "packing_list" not in st.session_state:
+    st.session_state.packing_list = None
+if "weather_data" not in st.session_state:
+    st.session_state.weather_data = {}  # day_number -> weather dict
 
 
 # ── rendering helpers ─────────────────────────────────────────────────────────
 
-def _render_itinerary(data: dict) -> None:
+def _render_itinerary(data: dict, weather: dict | None = None) -> None:
     dest = data.get("destination", "")
     dur = data.get("duration", "")
     ttype = data.get("traveler_type", "")
@@ -71,6 +233,17 @@ def _render_itinerary(data: dict) -> None:
         day_num = day.get("day_number", "?")
         theme = day.get("theme", "")
         label = f"Day {day_num}" + (f" — {theme}" if theme else "")
+        # append weather summary to expander label if available
+        w = (weather or {}).get(day_num)
+        if w:
+            code = w.get("code", 0)
+            icon = _WMO_ICONS.get(code, "🌡️")
+            t_max = w.get("t_max")
+            t_min = w.get("t_min")
+            if t_max is not None and t_min is not None:
+                label += f"  {icon} {t_min:.0f}–{t_max:.0f}°C"
+            else:
+                label += f"  {icon}"
         with st.expander(label, expanded=(day_num == 1)):
             time_icons = {"morning": "🌅", "afternoon": "☀️", "evening": "🌙"}
             for block in day.get("blocks", []):
@@ -94,6 +267,16 @@ def _render_itinerary(data: dict) -> None:
                 st.divider()
             if day.get("tips"):
                 st.success(f"💡 Tip: {day['tips']}")
+            if w:
+                code = w.get("code", 0)
+                icon = _WMO_ICONS.get(code, "🌡️")
+                desc = _WMO_CODES.get(code, "Unknown")
+                t_max = w.get("t_max")
+                t_min = w.get("t_min")
+                precip = w.get("precip")
+                temp_str = f"{t_min:.0f}–{t_max:.0f}°C" if (t_max is not None and t_min is not None) else ""
+                precip_str = f" · {precip:.1f}mm rain" if precip else ""
+                st.caption(f"{icon} **Weather:** {desc}{('  ' + temp_str) if temp_str else ''}{precip_str}")
 
     hotels = data.get("hotel_suggestions", [])
     if hotels:
@@ -292,6 +475,21 @@ def _render_clarification(data: dict) -> None:
         st.markdown(f"- {q}")
 
 
+def _render_packing_list(pl: PackingListResponse) -> None:
+    st.subheader("🎒 Packing List")
+    st.caption(pl.trip_summary)
+    cols = st.columns(min(len(pl.categories), 3))
+    for i, cat in enumerate(pl.categories):
+        with cols[i % len(cols)]:
+            st.markdown(f"**{cat.category}**")
+            for item in cat.items:
+                st.markdown(f"- {item}")
+    if pl.notes:
+        with st.expander("📌 Packing Tips"):
+            for note in pl.notes:
+                st.markdown(f"- {note}")
+
+
 def _run_graph(state: dict) -> dict:
     _NODE_LABELS = {
         "collect_requirements": "🧠 Understanding your request...",
@@ -324,48 +522,44 @@ with st.sidebar:
         "Destination(s) *",
         placeholder="e.g., Paris  |  Tokyo + Kyoto",
         help="Required for itinerary generation.",
+        key="sb_destination",
     )
     col_d, col_s = st.columns(2)
     with col_d:
-        duration_days = st.number_input("Duration (days)", min_value=1, max_value=60, value=5, step=1)
+        duration_days = st.number_input("Duration (days)", min_value=1, max_value=60, value=5, step=1, key="sb_duration_days")
     with col_s:
-        start_date = st.date_input("Start Date (opt.)")
+        start_date = st.date_input("Start Date (opt.)", key="sb_start_date")
 
-    origin = st.text_input("Departing From (opt.)", placeholder="e.g., London")
-    returning_to = st.text_input("Returning To (opt.)", placeholder="e.g., London")
+    origin = st.text_input("Departing From (opt.)", placeholder="e.g., London", key="sb_origin")
+    returning_to = st.text_input("Returning To (opt.)", placeholder="e.g., London", key="sb_returning_to")
 
     interests = st.multiselect(
         "Interests",
-        [
-            "Culture & History",
-            "Food & Dining",
-            "Nature & Outdoors",
-            "Adventure Sports",
-            "Art & Museums",
-            "Shopping",
-            "Nightlife",
-            "Family-Friendly",
-            "Wellness & Spa",
-        ],
+        _ALL_INTERESTS,
+        key="sb_interests",
     )
 
     budget_level = st.select_slider(
         "Budget Level",
         options=["budget", "mid_range", "luxury"],
         value="mid_range",
+        key="sb_budget_level",
     )
     pace = st.select_slider(
         "Travel Pace",
         options=["relaxed", "moderate", "packed"],
         value="moderate",
+        key="sb_pace",
     )
     traveler_type = st.selectbox(
         "Traveler Type",
         ["solo", "couple", "family", "group"],
+        key="sb_traveler_type",
     )
     constraints_raw = st.text_area(
         "Special Constraints (opt.)",
         placeholder="e.g., wheelchair accessible, vegetarian only, no flying",
+        key="sb_constraints",
     )
 
     st.divider()
@@ -381,6 +575,8 @@ with st.sidebar:
     if st.button("🔄 Reset", use_container_width=True):
         st.session_state.agent_state = build_initial_state()
         st.session_state.show_refine_input = False
+        st.session_state.packing_list = None
+        st.session_state.weather_data = {}
         st.rerun()
 
     # ── cost counter ──────────────────────────────────────────────────────────
@@ -409,8 +605,20 @@ with st.sidebar:
     _uploaded = st.file_uploader("📂 Load saved itinerary", type="json", label_visibility="collapsed")
     if _uploaded:
         _loaded = json.loads(_uploaded.read())
-        st.session_state.agent_state["final_response"] = _loaded
-        st.session_state.agent_state["itinerary_response"] = _loaded
+        # Support both raw itinerary JSON and history-entry JSON (which includes trip_request)
+        if "itinerary" in _loaded and "trip_request" in _loaded:
+            _it_data = _loaded["itinerary"]
+            _req_data = _loaded.get("trip_request") or {}
+        else:
+            _it_data = _loaded
+            _req_data = {}
+        st.session_state.agent_state["final_response"] = _it_data
+        st.session_state.agent_state["itinerary_response"] = _it_data
+        st.session_state.agent_state["trip_request"] = _req_data
+        st.session_state.packing_list = None
+        st.session_state.weather_data = {}
+        if _req_data:
+            _prefill_sidebar(_req_data)
         st.rerun()
 
     # ── history ───────────────────────────────────────────────────────────────
@@ -424,8 +632,14 @@ with st.sidebar:
             if st.button(_label, key=f"hist_{_entry['destination']}_{_help}",
                          help=_help, use_container_width=True):
                 _it = _entry["itinerary"]
+                _req = _entry.get("trip_request") or {}
                 st.session_state.agent_state["final_response"] = _it
                 st.session_state.agent_state["itinerary_response"] = _it
+                st.session_state.agent_state["trip_request"] = _req
+                st.session_state.packing_list = None
+                st.session_state.weather_data = {}
+                if _req:
+                    _prefill_sidebar(_req)
                 st.rerun()
 
 # ── generate itinerary ────────────────────────────────────────────────────────
@@ -478,7 +692,7 @@ if generate_clicked:
         result_state = _run_graph(new_state)
         st.session_state.agent_state = result_state
         if result_state.get("itinerary_response"):
-            _save_to_history(result_state["itinerary_response"])
+            _save_to_history(result_state["itinerary_response"], result_state.get("trip_request"))
         st.rerun()
 
 # ── refine plan ───────────────────────────────────────────────────────────────
@@ -526,7 +740,57 @@ for msg in messages:
 # Always show the itinerary if one has been generated
 if itinerary_response:
     st.divider()
-    _render_itinerary(itinerary_response.get("data", {}))
+    _render_itinerary(itinerary_response.get("data", {}), weather=st.session_state.weather_data or None)
+
+    # ── action buttons below itinerary ────────────────────────────────────────
+    btn_a, btn_b, _spacer = st.columns([1, 1, 3])
+    with btn_a:
+        if st.button("🎒 Generate Packing List", use_container_width=True):
+            with st.spinner("Generating packing list..."):
+                result = _generate_packing_list(itinerary_response.get("data", {}))
+            if result:
+                st.session_state.packing_list = result
+                st.rerun()
+            else:
+                st.error("Could not generate packing list. Please try again.")
+
+    _trip_req = agent_state.get("trip_request") or {}
+    _start_date = _trip_req.get("start_date")
+    # Fall back to the sidebar date widget for trips loaded from history without a stored start_date
+    if not _start_date and "sb_start_date" in st.session_state:
+        _sb_date = st.session_state["sb_start_date"]
+        if _sb_date:
+            _start_date = str(_sb_date)
+    with btn_b:
+        _weather_label = "🌤️ Refresh Weather" if st.session_state.weather_data else "🌤️ Add Weather Forecast"
+        _weather_disabled = not bool(_start_date)
+        _weather_help = "Set a Start Date in the sidebar to enable weather forecasts." if _weather_disabled else None
+        if st.button(_weather_label, use_container_width=True,
+                     disabled=_weather_disabled, help=_weather_help):
+            _itin_data = itinerary_response.get("data", {})
+            _dest_for_geo = _itin_data.get("destination", "")
+            _duration = _trip_req.get("duration_days", 7)
+            with st.spinner("Fetching weather forecast..."):
+                _coords = _geocode(_dest_for_geo)
+            if _coords:
+                _lat, _lon = _coords
+                with st.spinner("Loading forecast data..."):
+                    _forecast = _fetch_weather(_lat, _lon, _start_date, int(_duration))
+                if _forecast:
+                    # map day_number (1-based) → weather entry
+                    _weather_map = {}
+                    for _i, _w in enumerate(_forecast):
+                        _weather_map[_i + 1] = _w
+                    st.session_state.weather_data = _weather_map
+                    st.rerun()
+                else:
+                    st.warning("Weather data is only available within the next 16 days.")
+            else:
+                st.error(f"Could not geocode '{_dest_for_geo}'. Try a more specific destination name.")
+
+    if st.session_state.packing_list:
+        st.divider()
+        _render_packing_list(st.session_state.packing_list)
 
 # Show the latest Q&A answer or clarification below the itinerary
 if final_response and final_response.get("type") != "itinerary":

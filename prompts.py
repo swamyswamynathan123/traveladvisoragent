@@ -139,6 +139,31 @@ Instructions:
 7. Always give specific named recommendations — never vague phrases like "several restaurants can be found" or "a number of options are available." If search results contain specific names, use them. If search results lack specific names, draw on your training knowledge and mark each recommendation with "[General knowledge — verify current status]". NEVER say you could not find names or redirect the user to search engines — always provide actionable named places."""
 
 
+PACKING_LIST_PROMPT = """\
+Generate a detailed packing list for the trip described below.
+
+Trip details:
+- Destination: {destination}
+- Duration: {duration}
+- Start date: {start_date}
+- Traveler type: {traveler_type}
+- Interests: {interests}
+- Budget level: {budget_level}
+- Constraints: {constraints}
+- Activities planned: {activities_summary}
+
+Return ONLY valid JSON matching this schema exactly:
+{schema}
+
+Instructions:
+1. Create practical, specific categories (e.g., "Clothing", "Documents & Money", "Electronics", "Toiletries", "Health & Safety", "Day Pack Essentials").
+2. Tailor items to the destination climate, season, and planned activities.
+3. Include destination-specific items (e.g., "Phrasebook / translation app" for non-English destinations).
+4. Budget-level should influence recommendations (e.g., travel adapters for budget, nicer luggage notes for luxury).
+5. Add 2-3 practical notes (e.g., "Check airline baggage limits before packing", "Leave room for souvenirs").
+6. Keep each item concise (3-7 words max)."""
+
+
 SCHEMA_REPAIR_PROMPT = """\
 The previous response did not match the required JSON schema.
 
