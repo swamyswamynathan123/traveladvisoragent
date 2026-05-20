@@ -124,20 +124,49 @@ def _geocode(place: str) -> Optional[tuple[float, float]]:
     return None
 
 
-def _fetch_weather(lat: float, lon: float, start_date: str, num_days: int) -> list[dict]:
+def _fetch_weather(lat: float, lon: float, start_date: str, num_days: int) -> tuple[list[dict], str]:
     """
-    Call Open-Meteo for daily forecasts. Returns list of dicts keyed by date.
-    Only works for dates within the 16-day forecast window.
+    Return (daily_rows, label) using the appropriate Open-Meteo endpoint:
+      - "forecast"   → within the next 16 days (forecast API)
+      - "historical" → past trip up to 92 days ago (forecast API with past window)
+      - "archive"    → older past trips (archive API, data from 1940)
+      - "typical"    → future trip beyond 16 days (archive API, same dates last year)
+    Returns ([], "error") on failure.
     """
+    from datetime import date, timedelta
+
+    def _shift_year(d: date) -> date:
+        try:
+            return d.replace(year=d.year - 1)
+        except ValueError:
+            return d.replace(year=d.year - 1, day=28)
+
     try:
-        from datetime import date, timedelta
         start = date.fromisoformat(start_date)
         end = start + timedelta(days=num_days - 1)
+        today = date.today()
+
+        if start > today + timedelta(days=16):
+            # Far-future trip: show same calendar dates from last year as indicative weather
+            api = "https://archive-api.open-meteo.com/v1/archive"
+            q_start, q_end = _shift_year(start), _shift_year(end)
+            label = "typical"
+        elif end < today - timedelta(days=92):
+            # Old past trip: use full archive (data from 1940 onwards)
+            api = "https://archive-api.open-meteo.com/v1/archive"
+            q_start, q_end = start, end
+            label = "archive"
+        else:
+            # Within forecast window or recent past (≤92 days ago): forecast API handles both
+            api = "https://api.open-meteo.com/v1/forecast"
+            q_start = start
+            q_end = min(end, today + timedelta(days=16))
+            label = "forecast" if start >= today else "historical"
+
         url = (
-            f"https://api.open-meteo.com/v1/forecast"
-            f"?latitude={lat}&longitude={lon}"
+            f"{api}?latitude={lat}&longitude={lon}"
             f"&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum"
-            f"&start_date={start}&end_date={end}"
+            f"&start_date={q_start}&end_date={q_end}"
             f"&timezone=auto"
         )
         with urllib.request.urlopen(url, timeout=8) as resp:
@@ -148,7 +177,7 @@ def _fetch_weather(lat: float, lon: float, start_date: str, num_days: int) -> li
         t_max = daily.get("temperature_2m_max", [])
         t_min = daily.get("temperature_2m_min", [])
         precip = daily.get("precipitation_sum", [])
-        return [
+        rows = [
             {
                 "date": dates[i],
                 "code": codes[i] if i < len(codes) else 0,
@@ -158,8 +187,10 @@ def _fetch_weather(lat: float, lon: float, start_date: str, num_days: int) -> li
             }
             for i in range(len(dates))
         ]
-    except Exception:
-        return []
+        return rows, label
+    except Exception as exc:
+        logging.warning("Weather fetch failed: %s", exc)
+        return [], "error"
 
 
 def _generate_packing_list(itinerary_data: dict) -> Optional[PackingListResponse]:
@@ -216,6 +247,8 @@ if "packing_list" not in st.session_state:
     st.session_state.packing_list = None
 if "weather_data" not in st.session_state:
     st.session_state.weather_data = {}  # day_number -> weather dict
+if "weather_label" not in st.session_state:
+    st.session_state.weather_label = "forecast"
 if "pending_prefill" not in st.session_state:
     st.session_state.pending_prefill = None
 
@@ -227,7 +260,7 @@ if st.session_state.pending_prefill:
 
 # ── rendering helpers ─────────────────────────────────────────────────────────
 
-def _render_itinerary(data: dict, weather: dict | None = None) -> None:
+def _render_itinerary(data: dict, weather: dict | None = None, weather_label: str = "forecast") -> None:
     dest = data.get("destination", "")
     dur = data.get("duration", "")
     ttype = data.get("traveler_type", "")
@@ -283,7 +316,8 @@ def _render_itinerary(data: dict, weather: dict | None = None) -> None:
                 precip = w.get("precip")
                 temp_str = f"{t_min:.0f}–{t_max:.0f}°C" if (t_max is not None and t_min is not None) else ""
                 precip_str = f" · {precip:.1f}mm rain" if precip else ""
-                st.caption(f"{icon} **Weather:** {desc}{('  ' + temp_str) if temp_str else ''}{precip_str}")
+                _wtype = {"typical": " (typical, last year)", "archive": " (historical)", "historical": " (actual)"}.get(weather_label, "")
+                st.caption(f"{icon} **Weather{_wtype}:** {desc}{('  ' + temp_str) if temp_str else ''}{precip_str}")
 
     hotels = data.get("hotel_suggestions", [])
     if hotels:
@@ -584,6 +618,7 @@ with st.sidebar:
         st.session_state.show_refine_input = False
         st.session_state.packing_list = None
         st.session_state.weather_data = {}
+        st.session_state.weather_label = "forecast"
         st.rerun()
 
     # ── cost counter ──────────────────────────────────────────────────────────
@@ -747,7 +782,7 @@ for msg in messages:
 # Always show the itinerary if one has been generated
 if itinerary_response:
     st.divider()
-    _render_itinerary(itinerary_response.get("data", {}), weather=st.session_state.weather_data or None)
+    _render_itinerary(itinerary_response.get("data", {}), weather=st.session_state.weather_data or None, weather_label=st.session_state.weather_label)
 
     # ── action buttons below itinerary ────────────────────────────────────────
     btn_a, btn_b, _spacer = st.columns([1, 1, 3])
@@ -782,16 +817,18 @@ if itinerary_response:
             if _coords:
                 _lat, _lon = _coords
                 with st.spinner("Loading forecast data..."):
-                    _forecast = _fetch_weather(_lat, _lon, _start_date, int(_duration))
+                    _forecast, _wlabel = _fetch_weather(_lat, _lon, _start_date, int(_duration))
                 if _forecast:
-                    # map day_number (1-based) → weather entry
                     _weather_map = {}
                     for _i, _w in enumerate(_forecast):
                         _weather_map[_i + 1] = _w
                     st.session_state.weather_data = _weather_map
+                    st.session_state.weather_label = _wlabel
+                    if _wlabel == "typical":
+                        st.info("Showing typical weather from the same dates last year — your trip is more than 16 days away.")
                     st.rerun()
                 else:
-                    st.warning("Weather data is only available within the next 16 days.")
+                    st.warning("Could not fetch weather data for this destination and date range.")
             else:
                 st.error(f"Could not geocode '{_dest_for_geo}'. Try a more specific destination name.")
 
