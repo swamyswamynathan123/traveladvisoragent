@@ -154,7 +154,7 @@ def test_intent_detection_output_defaults():
 
 def test_flight_result_defaults():
     from schemas import FlightResult
-    f = FlightResult(airline="Iberia", origin="JFK", destination="MAD", price_usd="$487", url="https://kayak.com")
+    f = FlightResult(airline="Iberia", origin="JFK", destination="MAD", price="$487", url="https://kayak.com")
     assert f.flight_number == ""
     assert f.stops == ""
     assert f.duration == ""
@@ -164,7 +164,7 @@ def test_flight_result_defaults():
 def test_flight_result_list_wraps_results():
     from schemas import FlightResult, FlightResultList
     frl = FlightResultList(results=[
-        FlightResult(airline="Delta", origin="JFK", destination="MAD", price_usd="$512", url="https://delta.com")
+        FlightResult(airline="Delta", origin="JFK", destination="MAD", price="$512", url="https://delta.com")
     ])
     assert len(frl.results) == 1
     assert frl.results[0].airline == "Delta"
@@ -173,7 +173,7 @@ def test_flight_result_list_wraps_results():
 def test_hotel_result_defaults():
     from schemas import HotelResult
     h = HotelResult(name="Hotel Madrid", price_per_night="€118", url="https://booking.com")
-    assert h.stars == 0
+    assert h.stars is None
     assert h.neighborhood == ""
     assert h.amenities == ""
     assert h.rating == ""

@@ -173,7 +173,7 @@ class FlightResult(BaseModel):
     duration: str = ""
     stops: str = ""
     departure_time: str = ""
-    price_usd: str
+    price: str
     url: str
 
 
@@ -183,7 +183,7 @@ class FlightResultList(BaseModel):
 
 class HotelResult(BaseModel):
     name: str
-    stars: int = 0
+    stars: Optional[int] = None
     neighborhood: str = ""
     amenities: str = ""
     rating: str = ""
