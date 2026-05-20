@@ -217,8 +217,23 @@ def _render_clarification(data: dict) -> None:
 
 
 def _run_graph(state: dict) -> dict:
-    with st.spinner("🤔 Thinking..."):
-        return st.session_state.compiled_graph.invoke(state)
+    _NODE_LABELS = {
+        "collect_requirements": "🧠 Understanding your request...",
+        "validate_inputs": "✅ Validating inputs...",
+        "ask_clarification": "💬 Preparing clarification...",
+        "search_with_tavily": "🔍 Searching travel information...",
+        "generate_response": "✍️ Generating response...",
+        "personalization_check": "🎯 Reviewing personalization...",
+        "respond_to_user": "📝 Wrapping up...",
+    }
+    result = state
+    with st.status("Working on it...", expanded=True) as status:
+        for chunk in st.session_state.compiled_graph.stream(state, stream_mode="updates"):
+            for node_name, node_output in chunk.items():
+                st.write(_NODE_LABELS.get(node_name, f"Running {node_name}..."))
+                result = node_output
+        status.update(label="Done!", state="complete", expanded=False)
+    return result
 
 
 # ── sidebar ───────────────────────────────────────────────────────────────────
