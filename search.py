@@ -92,11 +92,12 @@ def search_hotels(
         check_out_str = check_out.strftime("%b %d, %Y")
     except (ValueError, TypeError):
         check_in_str = start_date
-        check_out_str = ""
+        check_out_str = None
 
     budget_label = _BUDGET_LABELS.get(budget_level, "mid-range")
+    date_range = f"{check_in_str} to {check_out_str}" if check_out_str else check_in_str
     query = (
-        f"hotels in {destination} {check_in_str} to {check_out_str} {budget_label} "
+        f"hotels in {destination} {date_range} {budget_label} "
         "price per night booking site:booking.com OR site:hotels.com OR site:tripadvisor.com"
     )
     result = tavily_search(query, max_results=5)

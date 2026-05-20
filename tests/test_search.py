@@ -1,12 +1,9 @@
-import pytest
 from unittest.mock import patch, MagicMock
 from schemas import (
     FlightResult, FlightResultList,
     HotelResult, HotelResultList,
     TavilySearchOutput, TavilyResult,
 )
-
-FAKE_KEY = "tvly-fake-key"
 
 
 def _tavily_ok(*results):
@@ -89,6 +86,19 @@ def test_search_hotels_returns_list_of_dicts():
 def test_search_hotels_returns_empty_on_tavily_error():
     from search import search_hotels
     with patch("search.tavily_search", return_value=_tavily_error()):
+        results = search_hotels("Madrid", "2026-06-01", 6, "mid_range")
+    assert results == []
+
+
+def test_search_hotels_returns_empty_on_llm_failure():
+    from search import search_hotels
+    fake_tavily = _tavily_ok({"title": "Hotels", "url": "https://x.com", "snippet": "text"})
+    mock_llm = MagicMock()
+    mock_structured = MagicMock()
+    mock_structured.invoke.side_effect = RuntimeError("LLM error")
+    mock_llm.with_structured_output.return_value = mock_structured
+    with patch("search.tavily_search", return_value=fake_tavily), \
+         patch("search.ChatOpenAI", return_value=mock_llm):
         results = search_hotels("Madrid", "2026-06-01", 6, "mid_range")
     assert results == []
 

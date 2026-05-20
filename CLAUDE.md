@@ -49,12 +49,16 @@ run.bat
 The app has a strict layered dependency order — no circular imports:
 
 ```
-schemas.py  ←  tools.py  ←  prompts.py  ←  graph.py  ←  app.py
+schemas.py  ←  tools.py  ←  search.py  ─┐
+                                          ├─  app.py
+schemas.py  ←  tools.py  ←  prompts.py  ←  graph.py  ─┘
 ```
 
 - **`schemas.py`** — All Pydantic models. No project imports. Defines both the data contracts (`TripRequest`, `ItineraryResponse`, `QuestionResponse`, `ClarificationResponse`, `TavilySearchOutput`, etc.) and the agent state model (`TravelAgentState`).
 
 - **`tools.py`** — Wraps the Tavily Python SDK into a single `tavily_search()` function that returns a `TavilySearchOutput`. Reads `TAVILY_API_KEY` at module level; tests patch `tools.TAVILY_API_KEY` to bypass the early-return guard.
+
+- **`search.py`** — `search_flights()` and `search_hotels()`. Each builds a Tavily query, calls `tavily_search()`, passes results to `gpt-4o-mini` via `with_structured_output(FlightResultList | HotelResultList)`, and returns a plain `list[dict]`. Returns `[]` on any error.
 
 - **`prompts.py`** — Six string constants (`SYSTEM_PROMPT`, `INTENT_DETECTION_PROMPT`, `CLARIFICATION_PROMPT`, `ITINERARY_GENERATION_PROMPT`, `QUESTION_ANSWER_PROMPT`, `SCHEMA_REPAIR_PROMPT`). Pure strings, no logic.
 
