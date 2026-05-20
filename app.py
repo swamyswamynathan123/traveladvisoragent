@@ -135,49 +135,32 @@ def _fetch_weather(lat: float, lon: float, start_date: str, num_days: int) -> tu
     """
     from datetime import date, timedelta
 
+    FORECAST_PAST_DAYS = 92   # forecast API's maximum past window
+    ARCHIVE_DELAY_DAYS  = 5   # archive API lags ~5 days behind today
+
     def _shift_year(d: date) -> date:
         try:
             return d.replace(year=d.year - 1)
         except ValueError:
             return d.replace(year=d.year - 1, day=28)
 
-    try:
-        start = date.fromisoformat(start_date)
-        end = start + timedelta(days=num_days - 1)
-        today = date.today()
-
-        if start > today + timedelta(days=16):
-            # Far-future trip: show same calendar dates from last year as indicative weather
-            api = "https://archive-api.open-meteo.com/v1/archive"
-            q_start, q_end = _shift_year(start), _shift_year(end)
-            label = "typical"
-        elif end < today - timedelta(days=92):
-            # Old past trip: use full archive (data from 1940 onwards)
-            api = "https://archive-api.open-meteo.com/v1/archive"
-            q_start, q_end = start, end
-            label = "archive"
-        else:
-            # Within forecast window or recent past (≤92 days ago): forecast API handles both
-            api = "https://api.open-meteo.com/v1/forecast"
-            q_start = start
-            q_end = min(end, today + timedelta(days=16))
-            label = "forecast" if start >= today else "historical"
-
+    def _call(api_url: str, q_start: date, q_end: date) -> list[dict]:
+        if q_start > q_end:
+            return []
         url = (
-            f"{api}?latitude={lat}&longitude={lon}"
+            f"{api_url}?latitude={lat}&longitude={lon}"
             f"&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum"
-            f"&start_date={q_start}&end_date={q_end}"
-            f"&timezone=auto"
+            f"&start_date={q_start}&end_date={q_end}&timezone=auto"
         )
         with urllib.request.urlopen(url, timeout=8) as resp:
-            data = json.loads(resp.read())
-        daily = data.get("daily", {})
+            raw = json.loads(resp.read())
+        daily = raw.get("daily", {})
         dates = daily.get("time", [])
         codes = daily.get("weathercode", [])
         t_max = daily.get("temperature_2m_max", [])
         t_min = daily.get("temperature_2m_min", [])
         precip = daily.get("precipitation_sum", [])
-        rows = [
+        return [
             {
                 "date": dates[i],
                 "code": codes[i] if i < len(codes) else 0,
@@ -187,7 +170,39 @@ def _fetch_weather(lat: float, lon: float, start_date: str, num_days: int) -> tu
             }
             for i in range(len(dates))
         ]
+
+    try:
+        start = date.fromisoformat(start_date)
+        end   = start + timedelta(days=num_days - 1)
+        today = date.today()
+        forecast_limit  = today + timedelta(days=16)
+        archive_horizon = today - timedelta(days=ARCHIVE_DELAY_DAYS)
+
+        if start > forecast_limit:
+            # Far future — use same calendar dates from last year as indicative weather.
+            # Keep shifting back until the dates fall within the archive's coverage.
+            qs, qe = _shift_year(start), _shift_year(end)
+            while qs > archive_horizon:
+                qs, qe = _shift_year(qs), _shift_year(qe)
+            rows = _call("https://archive-api.open-meteo.com/v1/archive", qs, qe)
+            label = "typical"
+
+        elif start < today - timedelta(days=FORECAST_PAST_DAYS):
+            # Old past trip — use archive.  BUG FIX: was checking `end` before; must check `start`.
+            qs = start
+            qe = min(end, archive_horizon)  # archive may not have the last ~5 days
+            rows = _call("https://archive-api.open-meteo.com/v1/archive", qs, qe)
+            label = "archive"
+
+        else:
+            # Recent past (≤92 days ago) or near future (≤16 days): forecast API.
+            qs = start
+            qe = min(end, forecast_limit)
+            rows = _call("https://api.open-meteo.com/v1/forecast", qs, qe)
+            label = "forecast" if start >= today else "historical"
+
         return rows, label
+
     except Exception as exc:
         logging.warning("Weather fetch failed: %s", exc)
         return [], "error"
