@@ -216,6 +216,13 @@ if "packing_list" not in st.session_state:
     st.session_state.packing_list = None
 if "weather_data" not in st.session_state:
     st.session_state.weather_data = {}  # day_number -> weather dict
+if "pending_prefill" not in st.session_state:
+    st.session_state.pending_prefill = None
+
+# Apply any pending sidebar prefill BEFORE widgets are instantiated
+if st.session_state.pending_prefill:
+    _prefill_sidebar(st.session_state.pending_prefill)
+    st.session_state.pending_prefill = None
 
 
 # ── rendering helpers ─────────────────────────────────────────────────────────
@@ -618,7 +625,7 @@ with st.sidebar:
         st.session_state.packing_list = None
         st.session_state.weather_data = {}
         if _req_data:
-            _prefill_sidebar(_req_data)
+            st.session_state.pending_prefill = _req_data
         st.rerun()
 
     # ── history ───────────────────────────────────────────────────────────────
@@ -639,7 +646,7 @@ with st.sidebar:
                 st.session_state.packing_list = None
                 st.session_state.weather_data = {}
                 if _req:
-                    _prefill_sidebar(_req)
+                    st.session_state.pending_prefill = _req
                 st.rerun()
 
 # ── generate itinerary ────────────────────────────────────────────────────────
