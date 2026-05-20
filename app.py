@@ -181,7 +181,7 @@ def _fetch_weather(lat: float, lon: float, start_date: str, num_days: int) -> tu
         start = date.fromisoformat(start_date)
         end   = start + timedelta(days=num_days - 1)
         today = date.today()
-        forecast_limit  = today + timedelta(days=16)
+        forecast_limit  = today + timedelta(days=15)  # API counts today as day 1, so max is today+15
         archive_horizon = today - timedelta(days=ARCHIVE_DELAY_DAYS)
 
         if start > forecast_limit:
