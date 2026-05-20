@@ -1,6 +1,7 @@
 from __future__ import annotations
 import json
 import logging
+import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime
@@ -149,14 +150,19 @@ def _fetch_weather(lat: float, lon: float, start_date: str, num_days: int) -> tu
             return []
         url = (
             f"{api_url}?latitude={lat}&longitude={lon}"
-            f"&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum"
+            f"&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum"
             f"&start_date={q_start}&end_date={q_end}&timezone=auto"
         )
-        with urllib.request.urlopen(url, timeout=8) as resp:
-            raw = json.loads(resp.read())
+        try:
+            with urllib.request.urlopen(url, timeout=8) as resp:
+                raw = json.loads(resp.read())
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode("utf-8", errors="replace")
+            logging.warning("Weather API error %s for URL %s — %s", exc.code, url, body)
+            raise
         daily = raw.get("daily", {})
         dates = daily.get("time", [])
-        codes = daily.get("weathercode", [])
+        codes = daily.get("weather_code", daily.get("weathercode", []))
         t_max = daily.get("temperature_2m_max", [])
         t_min = daily.get("temperature_2m_min", [])
         precip = daily.get("precipitation_sum", [])
@@ -224,7 +230,8 @@ def _build_weather_map(destination: str, start_date: str, total_days: int, itin_
         coords = _geocode(destination)
         if not coords:
             return {}, "error"
-        rows, label = _fetch_weather(coords[0], coords[1], start_date, total_days)
+        actual_days = len(itin_data.get("itinerary", [])) or total_days
+        rows, label = _fetch_weather(coords[0], coords[1], start_date, actual_days)
         return {i + 1: r for i, r in enumerate(rows)}, label
 
     # Geocode each city
