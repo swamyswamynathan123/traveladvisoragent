@@ -251,6 +251,15 @@ if "weather_label" not in st.session_state:
     st.session_state.weather_label = "forecast"
 if "pending_prefill" not in st.session_state:
     st.session_state.pending_prefill = None
+# Sidebar widget defaults — only set once; _prefill_sidebar overwrites these on history load
+if "sb_duration_days" not in st.session_state:
+    st.session_state.sb_duration_days = 5
+if "sb_budget_level" not in st.session_state:
+    st.session_state.sb_budget_level = "mid_range"
+if "sb_pace" not in st.session_state:
+    st.session_state.sb_pace = "moderate"
+if "sb_traveler_type" not in st.session_state:
+    st.session_state.sb_traveler_type = "solo"
 
 # Apply any pending sidebar prefill BEFORE widgets are instantiated
 if st.session_state.pending_prefill:
@@ -567,7 +576,7 @@ with st.sidebar:
     )
     col_d, col_s = st.columns(2)
     with col_d:
-        duration_days = st.number_input("Duration (days)", min_value=1, max_value=60, value=5, step=1, key="sb_duration_days")
+        duration_days = st.number_input("Duration (days)", min_value=1, max_value=60, step=1, key="sb_duration_days")
     with col_s:
         start_date = st.date_input("Start Date (opt.)", key="sb_start_date")
 
@@ -583,13 +592,11 @@ with st.sidebar:
     budget_level = st.select_slider(
         "Budget Level",
         options=["budget", "mid_range", "luxury"],
-        value="mid_range",
         key="sb_budget_level",
     )
     pace = st.select_slider(
         "Travel Pace",
         options=["relaxed", "moderate", "packed"],
-        value="moderate",
         key="sb_pace",
     )
     traveler_type = st.selectbox(
