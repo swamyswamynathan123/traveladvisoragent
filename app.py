@@ -193,6 +193,77 @@ def _fetch_weather(lat: float, lon: float, start_date: str, num_days: int) -> tu
         return [], "error"
 
 
+def _build_weather_map(destination: str, start_date: str, total_days: int, itin_data: dict) -> tuple[dict, str]:
+    """
+    Build a day_number → weather_entry dict.
+    For multi-city trips, geocodes each city separately and maps days to the
+    nearest city using block coordinates, then fetches per-city forecasts.
+    Falls back to single-city logic for single-destination trips.
+    """
+    import re
+    from datetime import date, timedelta
+
+    cities = [c.strip() for c in re.split(r'[,+&/]|\band\b', destination, flags=re.IGNORECASE) if c.strip()]
+
+    if len(cities) <= 1:
+        coords = _geocode(destination)
+        if not coords:
+            return {}, "error"
+        rows, label = _fetch_weather(coords[0], coords[1], start_date, total_days)
+        return {i + 1: r for i, r in enumerate(rows)}, label
+
+    # Geocode each city
+    city_coords: dict[str, tuple] = {}
+    for city in cities:
+        c = _geocode(city)
+        if c:
+            city_coords[city] = c
+
+    if not city_coords:
+        return {}, "error"
+
+    def _nearest_city(lat: float, lon: float) -> str:
+        return min(city_coords, key=lambda c: (lat - city_coords[c][0]) ** 2 + (lon - city_coords[c][1]) ** 2)
+
+    # Assign each day to the nearest geocoded city using its first block with coordinates
+    day_to_city: dict[int, str] = {}
+    last_city = cities[0]
+    for day in sorted(itin_data.get("itinerary", []), key=lambda d: d.get("day_number", 0)):
+        dn = day.get("day_number", 1)
+        assigned = last_city
+        for block in day.get("blocks", []):
+            blat, blon = block.get("latitude"), block.get("longitude")
+            if blat and blon:
+                assigned = _nearest_city(blat, blon)
+                break
+        day_to_city[dn] = assigned
+        last_city = assigned
+
+    # Fetch one forecast per city covering only the days spent there
+    trip_start = date.fromisoformat(start_date)
+    city_day_lists: dict[str, list[int]] = {}
+    for dn, city in day_to_city.items():
+        city_day_lists.setdefault(city, []).append(dn)
+
+    weather_map: dict[int, dict] = {}
+    overall_label = "forecast"
+    for city, days in city_day_lists.items():
+        if city not in city_coords:
+            continue
+        clat, clon = city_coords[city]
+        first_day = min(days)
+        num_days = max(days) - first_day + 1
+        city_start = trip_start + timedelta(days=first_day - 1)
+        rows, label = _fetch_weather(clat, clon, str(city_start), num_days)
+        if label in ("typical", "archive", "historical"):
+            overall_label = label
+        for i, dn in enumerate(range(first_day, first_day + len(rows))):
+            if dn in day_to_city and day_to_city[dn] == city and i < len(rows):
+                weather_map[dn] = rows[i]
+
+    return weather_map, overall_label
+
+
 def _generate_packing_list(itinerary_data: dict) -> Optional[PackingListResponse]:
     """Call GPT-4o to generate a packing list for the current itinerary."""
     try:
@@ -251,6 +322,8 @@ if "weather_label" not in st.session_state:
     st.session_state.weather_label = "forecast"
 if "pending_prefill" not in st.session_state:
     st.session_state.pending_prefill = None
+if "geocode_cache" not in st.session_state:
+    st.session_state.geocode_cache = {}  # location string → (lat, lon) or None
 # Sidebar widget defaults — only set once; _prefill_sidebar overwrites these on history load
 if "sb_duration_days" not in st.session_state:
     st.session_state.sb_duration_days = 5
@@ -434,19 +507,37 @@ def _render_map(data: dict) -> None:
         [255, 87, 51], [52, 152, 219], [39, 174, 96], [155, 89, 182],
         [243, 156, 18], [26, 188, 156], [231, 76, 60], [52, 73, 94],
     ]
+    cache: dict = st.session_state.geocode_cache
     points = []
+    to_geocode: list[tuple] = []  # (day_num, color, activity, location)
+
     for day in data.get("itinerary", []):
         day_num = day.get("day_number", 1)
         color = _DAY_COLORS[(day_num - 1) % len(_DAY_COLORS)]
         for block in day.get("blocks", []):
             lat = block.get("latitude")
             lon = block.get("longitude")
+            label = f"Day {day_num}: {block.get('activity', '')}"
             if lat and lon:
-                points.append({
-                    "lat": lat, "lon": lon,
-                    "label": f"Day {day_num}: {block.get('activity', '')}",
-                    "color": color,
-                })
+                points.append({"lat": lat, "lon": lon, "label": label, "color": color})
+            else:
+                loc = block.get("location") or block.get("activity", "")[:80]
+                if loc:
+                    if loc in cache:
+                        coords = cache[loc]
+                        if coords:
+                            points.append({"lat": coords[0], "lon": coords[1], "label": label, "color": color})
+                    elif len(to_geocode) < 12:  # cap to avoid excessive API calls
+                        to_geocode.append((day_num, color, label, loc))
+
+    # Geocode missing locations (first render only; cached on subsequent renders)
+    if to_geocode:
+        for _dn, _color, _label, _loc in to_geocode:
+            coords = _geocode(_loc)
+            cache[_loc] = coords
+            if coords:
+                points.append({"lat": coords[0], "lon": coords[1], "label": _label, "color": _color})
+
     if not points:
         return
     df = pd.DataFrame(points)
@@ -547,6 +638,7 @@ def _run_graph(state: dict) -> dict:
         "ask_clarification": "💬 Preparing clarification...",
         "search_with_tavily": "🔍 Searching travel information...",
         "generate_response": "✍️ Generating response...",
+        "personalization_check": "🎯 Checking personalization...",
         "respond_to_user": "📝 Wrapping up...",
     }
     result = state
@@ -819,25 +911,16 @@ if itinerary_response:
             _itin_data = itinerary_response.get("data", {})
             _dest_for_geo = _itin_data.get("destination", "")
             _duration = _trip_req.get("duration_days", 7)
-            with st.spinner("Fetching weather forecast..."):
-                _coords = _geocode(_dest_for_geo)
-            if _coords:
-                _lat, _lon = _coords
-                with st.spinner("Loading forecast data..."):
-                    _forecast, _wlabel = _fetch_weather(_lat, _lon, _start_date, int(_duration))
-                if _forecast:
-                    _weather_map = {}
-                    for _i, _w in enumerate(_forecast):
-                        _weather_map[_i + 1] = _w
-                    st.session_state.weather_data = _weather_map
-                    st.session_state.weather_label = _wlabel
-                    if _wlabel == "typical":
-                        st.info("Showing typical weather from the same dates last year — your trip is more than 16 days away.")
-                    st.rerun()
-                else:
-                    st.warning("Could not fetch weather data for this destination and date range.")
+            with st.spinner("Fetching weather (per city)..." if "," in _dest_for_geo or "+" in _dest_for_geo else "Fetching weather forecast..."):
+                _weather_map, _wlabel = _build_weather_map(_dest_for_geo, _start_date, int(_duration), _itin_data)
+            if _weather_map:
+                st.session_state.weather_data = _weather_map
+                st.session_state.weather_label = _wlabel
+                if _wlabel == "typical":
+                    st.info("Showing typical weather from the same dates last year — your trip is more than 16 days away.")
+                st.rerun()
             else:
-                st.error(f"Could not geocode '{_dest_for_geo}'. Try a more specific destination name.")
+                st.warning("Could not fetch weather data for this destination and date range.")
 
     if st.session_state.packing_list:
         st.divider()
