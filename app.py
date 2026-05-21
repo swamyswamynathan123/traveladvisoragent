@@ -323,16 +323,16 @@ def _generate_packing_list(itinerary_data: dict) -> Optional[PackingListResponse
 def _render_flight_card(f: dict, highlight: bool) -> str:
     border = "#4c5bd4" if highlight else "#374151"
     price_color = "#4ade80" if highlight else "#f59e0b"
-    airline = _html.escape(f.get("airline") or "")
-    flight_number = _html.escape(f.get("flight_number") or "")
-    duration = _html.escape(f.get("duration") or "")
-    stops = _html.escape(f.get("stops") or "")
-    departure_time = _html.escape(f.get("departure_time") or "")
+    airline = _html.escape(str(f.get("airline") or ""))
+    flight_number = _html.escape(str(f.get("flight_number") or ""))
+    duration = _html.escape(str(f.get("duration") or ""))
+    stops = _html.escape(str(f.get("stops") or ""))
+    departure_time = _html.escape(str(f.get("departure_time") or ""))
     price = _html.escape(str(f.get("price") or "N/A"))
-    origin = _html.escape(f.get("origin") or "")
-    destination = _html.escape(f.get("destination") or "")
+    origin = _html.escape(str(f.get("origin") or ""))
+    destination = _html.escape(str(f.get("destination") or ""))
     raw_url = f.get("url") or "#"
-    url = raw_url if raw_url.startswith(("http://", "https://")) else "#"
+    url = _html.escape(raw_url if raw_url.startswith(("http://", "https://")) else "#", quote=True)
     meta_parts = [p for p in [duration, stops, f"Departs {departure_time}" if departure_time else None] if p]
     meta = " · ".join(meta_parts) if meta_parts else ""
     airline_line = airline + (f" · {flight_number}" if flight_number else "")
@@ -358,15 +358,15 @@ def _render_flight_card(f: dict, highlight: bool) -> str:
 def _render_hotel_card(h: dict, highlight: bool) -> str:
     border = "#4c5bd4" if highlight else "#374151"
     price_color = "#4ade80" if highlight else "#f59e0b"
-    name = _html.escape(h.get("name") or "")
-    neighborhood = _html.escape(h.get("neighborhood") or "")
-    amenities = _html.escape(h.get("amenities") or "")
-    rating = _html.escape(h.get("rating") or "")
-    rating_label = _html.escape(h.get("rating_label") or "")
-    price_per_night = _html.escape(h.get("price_per_night") or "N/A")
-    price_total = _html.escape(h.get("price_total") or "")
+    name = _html.escape(str(h.get("name") or ""))
+    neighborhood = _html.escape(str(h.get("neighborhood") or ""))
+    amenities = _html.escape(str(h.get("amenities") or ""))
+    rating = _html.escape(str(h.get("rating") or ""))
+    rating_label = _html.escape(str(h.get("rating_label") or ""))
+    price_per_night = _html.escape(str(h.get("price_per_night") or "N/A"))
+    price_total = _html.escape(str(h.get("price_total") or ""))
     raw_url = h.get("url") or "#"
-    url = raw_url if raw_url.startswith(("http://", "https://")) else "#"
+    url = _html.escape(raw_url if raw_url.startswith(("http://", "https://")) else "#", quote=True)
     stars_val = h.get("stars")
     try:
         stars_int = int(stars_val) if stars_val is not None else 0
