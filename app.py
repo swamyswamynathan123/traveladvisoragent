@@ -882,6 +882,10 @@ if _in_streamlit:
             st.session_state.agent_state["trip_request"] = _req_data
             st.session_state.packing_list = None
             st.session_state.weather_data = {}
+            st.session_state.flight_results = []
+            st.session_state.hotel_results = []
+            st.session_state.flight_search_done = False
+            st.session_state.hotel_search_done = False
             if _req_data:
                 st.session_state.pending_prefill = _req_data
             st.rerun()
