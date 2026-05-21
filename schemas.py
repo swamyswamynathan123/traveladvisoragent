@@ -183,7 +183,7 @@ class FlightResultList(BaseModel):
 
 class HotelResult(BaseModel):
     name: str
-    stars: Optional[int] = None
+    stars: Optional[int] = Field(default=None, ge=1, le=5)
     neighborhood: str = ""
     amenities: str = ""
     rating: str = ""

@@ -372,6 +372,7 @@ def _render_hotel_card(h: dict, highlight: bool) -> str:
         stars_int = int(stars_val) if stars_val is not None else 0
     except (TypeError, ValueError):
         stars_int = 0
+    stars_int = max(0, min(5, stars_int))
     stars_str = "★" * stars_int if stars_int > 0 else ""
     name_line = name + (f" {stars_str}" if stars_str else "")
     sub_parts = [p for p in [neighborhood, amenities] if p]
@@ -842,6 +843,11 @@ if _in_streamlit:
             st.session_state.packing_list = None
             st.session_state.weather_data = {}
             st.session_state.weather_label = "forecast"
+            st.session_state.flight_results = []
+            st.session_state.hotel_results = []
+            st.session_state.flight_search_done = False
+            st.session_state.hotel_search_done = False
+            st.session_state["flight_origin_input"] = ""
             st.rerun()
 
         # ── cost counter ──────────────────────────────────────────────────────────
@@ -1109,9 +1115,12 @@ if _in_streamlit:
             _budget = _trip_req.get("budget_level", "mid_range")
             # Fires on first render after itinerary generation (eager, not on-demand)
             if _dest and not st.session_state.hotel_search_done:
-                with st.spinner(f"Searching hotels in {_dest}..."):
-                    st.session_state.hotel_results = search_hotels(_dest, _start_date or "", _duration, _budget)
-                st.session_state.hotel_search_done = True
+                if not _start_date:
+                    st.info("Set a Start Date in the sidebar to search for hotels with accurate pricing.")
+                else:
+                    with st.spinner(f"Searching hotels in {_dest}..."):
+                        st.session_state.hotel_results = search_hotels(_dest, _start_date, _duration, _budget)
+                    st.session_state.hotel_search_done = True
             if st.session_state.hotel_search_done:
                 hotels = st.session_state.hotel_results
                 if not hotels:
