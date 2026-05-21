@@ -50,6 +50,11 @@ Search results:
 {context}"""
 
 
+def _first_city(destination: str) -> str:
+    """Return the first city from a multi-city destination string like 'Madrid, Barcelona, Seville'."""
+    return destination.split(",")[0].strip()
+
+
 def search_flights(origin: str, destination: str, start_date: str) -> list[dict]:
     """Search Tavily for flights and parse with gpt-4o-mini. Returns list of dicts."""
     try:
@@ -57,10 +62,14 @@ def search_flights(origin: str, destination: str, start_date: str) -> list[dict]
     except (ValueError, TypeError):
         month_year = start_date
 
-    query = f"cheap flights from {origin} to {destination} {month_year} price per person booking"
+    dest = _first_city(destination)
+    query = f"cheap flights from {origin} to {dest} {month_year} price per person booking"
     result = tavily_search(query, search_depth="advanced", max_results=5)
     if result.tool_status != "ok" or not result.results:
-        logger.warning("Flight Tavily search returned no results: status=%s query=%r", result.tool_status, query)
+        logger.warning(
+            "Flight Tavily search returned no results: status=%s error=%r query=%r",
+            result.tool_status, result.error_message, query,
+        )
         return []
 
     context = "\n\n".join(
@@ -94,12 +103,16 @@ def search_hotels(
         check_in_str = start_date
         check_out_str = None
 
+    dest = _first_city(destination)
     budget_label = _BUDGET_LABELS.get(budget_level, "mid-range")
     date_range = f"{check_in_str} to {check_out_str}" if check_out_str else check_in_str
-    query = f"{budget_label} hotels in {destination} {date_range} price per night booking"
+    query = f"{budget_label} hotels in {dest} {date_range} price per night booking"
     result = tavily_search(query, search_depth="advanced", max_results=5)
     if result.tool_status != "ok" or not result.results:
-        logger.warning("Hotel Tavily search returned no results: status=%s query=%r", result.tool_status, query)
+        logger.warning(
+            "Hotel Tavily search returned no results: status=%s error=%r query=%r",
+            result.tool_status, result.error_message, query,
+        )
         return []
 
     context = "\n\n".join(
