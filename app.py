@@ -18,7 +18,7 @@ from langchain_openai import ChatOpenAI
 from graph import build_graph, build_initial_state
 from prompts import PACKING_LIST_PROMPT
 from schemas import PackingListResponse
-from search import search_flights, search_hotels  # noqa: F401 — used in Task 4 tab rendering
+from search import search_flights, search_hotels
 
 _HISTORY_FILE = Path(__file__).parent / "itineraries" / "history.json"
 
@@ -886,6 +886,7 @@ if _in_streamlit:
             st.session_state.hotel_results = []
             st.session_state.flight_search_done = False
             st.session_state.hotel_search_done = False
+            st.session_state["flight_origin_input"] = ""
             if _req_data:
                 st.session_state.pending_prefill = _req_data
             st.rerun()
@@ -911,6 +912,7 @@ if _in_streamlit:
                     st.session_state.hotel_results = []
                     st.session_state.flight_search_done = False
                     st.session_state.hotel_search_done = False
+                    st.session_state["flight_origin_input"] = ""
                     if _req:
                         st.session_state.pending_prefill = _req
                     st.rerun()
@@ -970,6 +972,7 @@ if _in_streamlit:
             st.session_state.hotel_results = []
             st.session_state.flight_search_done = False
             st.session_state.hotel_search_done = False
+            st.session_state["flight_origin_input"] = ""
             st.rerun()
 
     # ── refine plan ───────────────────────────────────────────────────────────────
@@ -1080,6 +1083,7 @@ if _in_streamlit:
                     key="flight_origin_input",
                     placeholder="e.g. New York",
                 )
+            # Fires on first render after itinerary generation (not on tab click — Streamlit executes all tab blocks on every rerun)
             if _origin and _dest and not st.session_state.flight_search_done:
                 with st.spinner(f"Searching flights from {_origin} to {_dest}..."):
                     st.session_state.flight_results = search_flights(_origin, _dest, _start_date or "")
@@ -1101,8 +1105,9 @@ if _in_streamlit:
 
         with tab_hotels:
             _dest = (_trip_req.get("destination") or "").strip()
-            _duration = int(_trip_req.get("duration_days") or 5)
+            _duration = int(_trip_req.get("duration_days") or 7)
             _budget = _trip_req.get("budget_level", "mid_range")
+            # Fires on first render after itinerary generation (eager, not on-demand)
             if _dest and not st.session_state.hotel_search_done:
                 with st.spinner(f"Searching hotels in {_dest}..."):
                     st.session_state.hotel_results = search_hotels(_dest, _start_date or "", _duration, _budget)
