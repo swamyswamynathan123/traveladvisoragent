@@ -121,7 +121,7 @@ def test_search_hotels_query_uses_budget_label():
 
 def test_render_flight_card_contains_airline_and_price():
     import sys, types
-    sys.modules.setdefault("streamlit", types.ModuleType("streamlit"))
+    sys.modules["streamlit"] = types.ModuleType("streamlit")
     from app import _render_flight_card
     flight = {
         "airline": "Iberia", "flight_number": "IB 6251", "origin": "JFK",
@@ -137,7 +137,7 @@ def test_render_flight_card_contains_airline_and_price():
 
 def test_render_flight_card_grey_border_when_not_highlighted():
     import sys, types
-    sys.modules.setdefault("streamlit", types.ModuleType("streamlit"))
+    sys.modules["streamlit"] = types.ModuleType("streamlit")
     from app import _render_flight_card
     flight = {
         "airline": "Delta", "flight_number": "", "origin": "JFK",
@@ -151,7 +151,7 @@ def test_render_flight_card_grey_border_when_not_highlighted():
 
 def test_render_hotel_card_contains_name_and_price():
     import sys, types
-    sys.modules.setdefault("streamlit", types.ModuleType("streamlit"))
+    sys.modules["streamlit"] = types.ModuleType("streamlit")
     from app import _render_hotel_card
     hotel = {
         "name": "Hotel Vincci Soho", "stars": 4, "neighborhood": "Gran Via",
@@ -163,3 +163,13 @@ def test_render_hotel_card_contains_name_and_price():
     assert "€118" in html
     assert "https://booking.com/vincci" in html
     assert "#4c5bd4" in html
+
+
+def test_render_hotel_card_grey_border_when_not_highlighted():
+    import sys, types
+    sys.modules["streamlit"] = types.ModuleType("streamlit")
+    from app import _render_hotel_card
+    hotel = {"name": "Budget Inn", "price_per_night": "€50", "url": "https://hotels.com"}
+    html = _render_hotel_card(hotel, highlight=False)
+    assert "#374151" in html
+    assert "#4c5bd4" not in html

@@ -1,4 +1,5 @@
 from __future__ import annotations
+import html as _html
 import json
 import logging
 import urllib.error
@@ -17,7 +18,7 @@ from langchain_openai import ChatOpenAI
 from graph import build_graph, build_initial_state
 from prompts import PACKING_LIST_PROMPT
 from schemas import PackingListResponse
-from search import search_flights, search_hotels
+from search import search_flights, search_hotels  # noqa: F401 — used in Task 4 tab rendering
 
 _HISTORY_FILE = Path(__file__).parent / "itineraries" / "history.json"
 
@@ -322,16 +323,20 @@ def _generate_packing_list(itinerary_data: dict) -> Optional[PackingListResponse
 def _render_flight_card(f: dict, highlight: bool) -> str:
     border = "#4c5bd4" if highlight else "#374151"
     price_color = "#4ade80" if highlight else "#f59e0b"
-    meta_parts = [p for p in [
-        f.get("duration"),
-        f.get("stops"),
-        f"Departs {f['departure_time']}" if f.get("departure_time") else None,
-    ] if p]
+    airline = _html.escape(f.get("airline") or "")
+    flight_number = _html.escape(f.get("flight_number") or "")
+    duration = _html.escape(f.get("duration") or "")
+    stops = _html.escape(f.get("stops") or "")
+    departure_time = _html.escape(f.get("departure_time") or "")
+    price = _html.escape(str(f.get("price") or "N/A"))
+    origin = _html.escape(f.get("origin") or "")
+    destination = _html.escape(f.get("destination") or "")
+    raw_url = f.get("url") or "#"
+    url = raw_url if raw_url.startswith(("http://", "https://")) else "#"
+    meta_parts = [p for p in [duration, stops, f"Departs {departure_time}" if departure_time else None] if p]
     meta = " · ".join(meta_parts) if meta_parts else ""
-    airline_line = f.get("airline", "")
-    if f.get("flight_number"):
-        airline_line += f" · {f['flight_number']}"
-    route = f"{f.get('origin', '')} → {f.get('destination', '')}"
+    airline_line = airline + (f" · {flight_number}" if flight_number else "")
+    route = f"{origin} → {destination}"
     return (
         f'<div style="background:#1e2130;border-radius:6px;padding:10px;display:flex;'
         f'align-items:center;gap:12px;border-left:3px solid {border};margin-bottom:8px">'
@@ -341,10 +346,10 @@ def _render_flight_card(f: dict, highlight: bool) -> str:
         f'<div style="color:#94a3b8;font-size:11px">{route}{(" · " + meta) if meta else ""}</div>'
         f'</div>'
         f'<div style="text-align:right;margin-right:8px">'
-        f'<div style="color:{price_color};font-size:15px;font-weight:bold">{f.get("price", "N/A")}</div>'
+        f'<div style="color:{price_color};font-size:15px;font-weight:bold">{price}</div>'
         f'<div style="color:#64748b;font-size:10px">per person</div>'
         f'</div>'
-        f'<a href="{f.get("url", "#")}" target="_blank" style="background:{border};color:white;'
+        f'<a href="{url}" target="_blank" style="background:{border};color:white;'
         f'border-radius:4px;padding:5px 12px;font-size:11px;text-decoration:none;white-space:nowrap">Book →</a>'
         f'</div>'
     )
@@ -353,17 +358,30 @@ def _render_flight_card(f: dict, highlight: bool) -> str:
 def _render_hotel_card(h: dict, highlight: bool) -> str:
     border = "#4c5bd4" if highlight else "#374151"
     price_color = "#4ade80" if highlight else "#f59e0b"
+    name = _html.escape(h.get("name") or "")
+    neighborhood = _html.escape(h.get("neighborhood") or "")
+    amenities = _html.escape(h.get("amenities") or "")
+    rating = _html.escape(h.get("rating") or "")
+    rating_label = _html.escape(h.get("rating_label") or "")
+    price_per_night = _html.escape(h.get("price_per_night") or "N/A")
+    price_total = _html.escape(h.get("price_total") or "")
+    raw_url = h.get("url") or "#"
+    url = raw_url if raw_url.startswith(("http://", "https://")) else "#"
     stars_val = h.get("stars")
-    stars_str = "★" * stars_val if stars_val else ""
-    name_line = h.get("name", "") + (f" {stars_str}" if stars_str else "")
-    sub_parts = [p for p in [h.get("neighborhood"), h.get("amenities")] if p]
+    try:
+        stars_int = int(stars_val) if stars_val is not None else 0
+    except (TypeError, ValueError):
+        stars_int = 0
+    stars_str = "★" * stars_int if stars_int > 0 else ""
+    name_line = name + (f" {stars_str}" if stars_str else "")
+    sub_parts = [p for p in [neighborhood, amenities] if p]
     sub = " · ".join(sub_parts) if sub_parts else ""
     rating_str = ""
-    if h.get("rating"):
-        rating_str = f"★ {h['rating']}"
-        if h.get("rating_label"):
-            rating_str += f" · {h['rating_label']}"
-    total_str = f" (~{h['price_total']} total)" if h.get("price_total") else ""
+    if rating:
+        rating_str = f"★ {rating}"
+        if rating_label:
+            rating_str += f" · {rating_label}"
+    total_str = f"~{price_total} total" if price_total else ""
     rating_div = (
         f'<div style="color:#fbbf24;font-size:11px;margin-top:2px">{rating_str}</div>'
         if rating_str else ""
@@ -379,10 +397,10 @@ def _render_hotel_card(h: dict, highlight: bool) -> str:
         f'</div>'
         f'<div style="text-align:right;align-self:center;margin-right:8px">'
         f'<div style="color:{price_color};font-size:14px;font-weight:bold">'
-        f'{h.get("price_per_night", "N/A")}'
+        f'{price_per_night}'
         f'<span style="font-size:10px;color:#94a3b8">/night</span></div>'
         f'<div style="color:#64748b;font-size:10px">{total_str}</div>'
-        f'<a href="{h.get("url", "#")}" target="_blank" style="background:{border};color:white;'
+        f'<a href="{url}" target="_blank" style="background:{border};color:white;'
         f'border-radius:4px;padding:4px 10px;font-size:10px;text-decoration:none;'
         f'display:inline-block;margin-top:4px">Book →</a>'
         f'</div>'
