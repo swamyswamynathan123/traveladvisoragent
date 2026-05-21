@@ -57,12 +57,10 @@ def search_flights(origin: str, destination: str, start_date: str) -> list[dict]
     except (ValueError, TypeError):
         month_year = start_date
 
-    query = (
-        f"flights from {origin} to {destination} {month_year} price booking "
-        "site:kayak.com OR site:google.com/travel OR site:skyscanner.com"
-    )
-    result = tavily_search(query, max_results=5)
+    query = f"cheap flights from {origin} to {destination} {month_year} price per person booking"
+    result = tavily_search(query, search_depth="advanced", max_results=5)
     if result.tool_status != "ok" or not result.results:
+        logger.warning("Flight Tavily search returned no results: status=%s query=%r", result.tool_status, query)
         return []
 
     context = "\n\n".join(
@@ -75,6 +73,8 @@ def search_flights(origin: str, destination: str, start_date: str) -> list[dict]
         parsed: FlightResultList = structured.invoke(
             _FLIGHT_PARSE_PROMPT.format(context=context)
         )
+        if not parsed.results:
+            logger.warning("Flight LLM parse returned 0 results for query=%r", query)
         return [f.model_dump() for f in parsed.results]
     except Exception as exc:
         logger.warning("Flight parse failed: %s", exc)
@@ -96,12 +96,10 @@ def search_hotels(
 
     budget_label = _BUDGET_LABELS.get(budget_level, "mid-range")
     date_range = f"{check_in_str} to {check_out_str}" if check_out_str else check_in_str
-    query = (
-        f"hotels in {destination} {date_range} {budget_label} "
-        "price per night booking site:booking.com OR site:hotels.com OR site:tripadvisor.com"
-    )
-    result = tavily_search(query, max_results=5)
+    query = f"{budget_label} hotels in {destination} {date_range} price per night booking"
+    result = tavily_search(query, search_depth="advanced", max_results=5)
     if result.tool_status != "ok" or not result.results:
+        logger.warning("Hotel Tavily search returned no results: status=%s query=%r", result.tool_status, query)
         return []
 
     context = "\n\n".join(
@@ -114,6 +112,8 @@ def search_hotels(
         parsed: HotelResultList = structured.invoke(
             _HOTEL_PARSE_PROMPT.format(context=context)
         )
+        if not parsed.results:
+            logger.warning("Hotel LLM parse returned 0 results for query=%r", query)
         return [h.model_dump() for h in parsed.results]
     except Exception as exc:
         logger.warning("Hotel parse failed: %s", exc)
