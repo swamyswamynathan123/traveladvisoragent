@@ -117,3 +117,49 @@ def test_search_hotels_query_uses_budget_label():
         search_hotels("Tokyo", "2026-07-01", 3, "budget")
     query_used = mock_tav.call_args[0][0]
     assert "budget" in query_used.lower()
+
+
+def test_render_flight_card_contains_airline_and_price():
+    import sys, types
+    sys.modules.setdefault("streamlit", types.ModuleType("streamlit"))
+    from app import _render_flight_card
+    flight = {
+        "airline": "Iberia", "flight_number": "IB 6251", "origin": "JFK",
+        "destination": "MAD", "duration": "7h 45m", "stops": "Non-stop",
+        "departure_time": "22:30", "price": "$487", "url": "https://kayak.com",
+    }
+    html = _render_flight_card(flight, highlight=True)
+    assert "Iberia" in html
+    assert "$487" in html
+    assert "https://kayak.com" in html
+    assert "#4c5bd4" in html
+
+
+def test_render_flight_card_grey_border_when_not_highlighted():
+    import sys, types
+    sys.modules.setdefault("streamlit", types.ModuleType("streamlit"))
+    from app import _render_flight_card
+    flight = {
+        "airline": "Delta", "flight_number": "", "origin": "JFK",
+        "destination": "MAD", "duration": "", "stops": "",
+        "departure_time": "", "price": "$512", "url": "https://delta.com",
+    }
+    html = _render_flight_card(flight, highlight=False)
+    assert "#374151" in html
+    assert "#4c5bd4" not in html
+
+
+def test_render_hotel_card_contains_name_and_price():
+    import sys, types
+    sys.modules.setdefault("streamlit", types.ModuleType("streamlit"))
+    from app import _render_hotel_card
+    hotel = {
+        "name": "Hotel Vincci Soho", "stars": 4, "neighborhood": "Gran Via",
+        "amenities": "Free WiFi", "rating": "4.3", "rating_label": "Excellent",
+        "price_per_night": "€118", "price_total": "€708", "url": "https://booking.com/vincci",
+    }
+    html = _render_hotel_card(hotel, highlight=True)
+    assert "Hotel Vincci Soho" in html
+    assert "€118" in html
+    assert "https://booking.com/vincci" in html
+    assert "#4c5bd4" in html

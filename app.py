@@ -17,6 +17,7 @@ from langchain_openai import ChatOpenAI
 from graph import build_graph, build_initial_state
 from prompts import PACKING_LIST_PROMPT
 from schemas import PackingListResponse
+from search import search_flights, search_hotels
 
 _HISTORY_FILE = Path(__file__).parent / "itineraries" / "history.json"
 
@@ -318,48 +319,122 @@ def _generate_packing_list(itinerary_data: dict) -> Optional[PackingListResponse
         return None
 
 
+def _render_flight_card(f: dict, highlight: bool) -> str:
+    border = "#4c5bd4" if highlight else "#374151"
+    price_color = "#4ade80" if highlight else "#f59e0b"
+    meta_parts = [p for p in [
+        f.get("duration"),
+        f.get("stops"),
+        f"Departs {f['departure_time']}" if f.get("departure_time") else None,
+    ] if p]
+    meta = " · ".join(meta_parts) if meta_parts else ""
+    airline_line = f.get("airline", "")
+    if f.get("flight_number"):
+        airline_line += f" · {f['flight_number']}"
+    route = f"{f.get('origin', '')} → {f.get('destination', '')}"
+    return (
+        f'<div style="background:#1e2130;border-radius:6px;padding:10px;display:flex;'
+        f'align-items:center;gap:12px;border-left:3px solid {border};margin-bottom:8px">'
+        f'<div style="font-size:20px">🛫</div>'
+        f'<div style="flex:1">'
+        f'<div style="font-weight:bold;color:#e2e8f0;font-size:13px">{airline_line}</div>'
+        f'<div style="color:#94a3b8;font-size:11px">{route}{(" · " + meta) if meta else ""}</div>'
+        f'</div>'
+        f'<div style="text-align:right;margin-right:8px">'
+        f'<div style="color:{price_color};font-size:15px;font-weight:bold">{f.get("price", "N/A")}</div>'
+        f'<div style="color:#64748b;font-size:10px">per person</div>'
+        f'</div>'
+        f'<a href="{f.get("url", "#")}" target="_blank" style="background:{border};color:white;'
+        f'border-radius:4px;padding:5px 12px;font-size:11px;text-decoration:none;white-space:nowrap">Book →</a>'
+        f'</div>'
+    )
+
+
+def _render_hotel_card(h: dict, highlight: bool) -> str:
+    border = "#4c5bd4" if highlight else "#374151"
+    price_color = "#4ade80" if highlight else "#f59e0b"
+    stars_val = h.get("stars")
+    stars_str = "★" * stars_val if stars_val else ""
+    name_line = h.get("name", "") + (f" {stars_str}" if stars_str else "")
+    sub_parts = [p for p in [h.get("neighborhood"), h.get("amenities")] if p]
+    sub = " · ".join(sub_parts) if sub_parts else ""
+    rating_str = ""
+    if h.get("rating"):
+        rating_str = f"★ {h['rating']}"
+        if h.get("rating_label"):
+            rating_str += f" · {h['rating_label']}"
+    total_str = f" (~{h['price_total']} total)" if h.get("price_total") else ""
+    rating_div = (
+        f'<div style="color:#fbbf24;font-size:11px;margin-top:2px">{rating_str}</div>'
+        if rating_str else ""
+    )
+    return (
+        f'<div style="background:#1e2130;border-radius:6px;padding:10px;display:flex;'
+        f'gap:12px;border-left:3px solid {border};margin-bottom:8px">'
+        f'<div style="font-size:26px;align-self:center">🏨</div>'
+        f'<div style="flex:1">'
+        f'<div style="font-weight:bold;color:#e2e8f0;font-size:13px">{name_line}</div>'
+        f'<div style="color:#94a3b8;font-size:11px">{sub}</div>'
+        f'{rating_div}'
+        f'</div>'
+        f'<div style="text-align:right;align-self:center;margin-right:8px">'
+        f'<div style="color:{price_color};font-size:14px;font-weight:bold">'
+        f'{h.get("price_per_night", "N/A")}'
+        f'<span style="font-size:10px;color:#94a3b8">/night</span></div>'
+        f'<div style="color:#64748b;font-size:10px">{total_str}</div>'
+        f'<a href="{h.get("url", "#")}" target="_blank" style="background:{border};color:white;'
+        f'border-radius:4px;padding:4px 10px;font-size:10px;text-decoration:none;'
+        f'display:inline-block;margin-top:4px">Book →</a>'
+        f'</div>'
+        f'</div>'
+    )
+
+
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
 
-st.set_page_config(
-    page_title="Travel Advisor Agent",
-    page_icon="✈️",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
+_in_streamlit = getattr(getattr(st, "runtime", None), "exists", lambda: False)()
+if _in_streamlit:
+    st.set_page_config(
+        page_title="Travel Advisor Agent",
+        page_icon="✈️",
+        layout="wide",
+        initial_sidebar_state="expanded",
+    )
 
 # ── session state bootstrap ───────────────────────────────────────────────────
 
-if "agent_state" not in st.session_state:
-    st.session_state.agent_state = build_initial_state()
-if "compiled_graph" not in st.session_state:
-    st.session_state.compiled_graph = build_graph()
-if "show_refine_input" not in st.session_state:
-    st.session_state.show_refine_input = False
-if "packing_list" not in st.session_state:
-    st.session_state.packing_list = None
-if "weather_data" not in st.session_state:
-    st.session_state.weather_data = {}  # day_number -> weather dict
-if "weather_label" not in st.session_state:
-    st.session_state.weather_label = "forecast"
-if "pending_prefill" not in st.session_state:
-    st.session_state.pending_prefill = None
-if "geocode_cache" not in st.session_state:
-    st.session_state.geocode_cache = {}  # location string → (lat, lon) or None
-# Sidebar widget defaults — only set once; _prefill_sidebar overwrites these on history load
-if "sb_duration_days" not in st.session_state:
-    st.session_state.sb_duration_days = 5
-if "sb_budget_level" not in st.session_state:
-    st.session_state.sb_budget_level = "mid_range"
-if "sb_pace" not in st.session_state:
-    st.session_state.sb_pace = "moderate"
-if "sb_traveler_type" not in st.session_state:
-    st.session_state.sb_traveler_type = "solo"
+if _in_streamlit:
+    if "agent_state" not in st.session_state:
+        st.session_state.agent_state = build_initial_state()
+    if "compiled_graph" not in st.session_state:
+        st.session_state.compiled_graph = build_graph()
+    if "show_refine_input" not in st.session_state:
+        st.session_state.show_refine_input = False
+    if "packing_list" not in st.session_state:
+        st.session_state.packing_list = None
+    if "weather_data" not in st.session_state:
+        st.session_state.weather_data = {}  # day_number -> weather dict
+    if "weather_label" not in st.session_state:
+        st.session_state.weather_label = "forecast"
+    if "pending_prefill" not in st.session_state:
+        st.session_state.pending_prefill = None
+    if "geocode_cache" not in st.session_state:
+        st.session_state.geocode_cache = {}  # location string → (lat, lon) or None
+    # Sidebar widget defaults — only set once; _prefill_sidebar overwrites these on history load
+    if "sb_duration_days" not in st.session_state:
+        st.session_state.sb_duration_days = 5
+    if "sb_budget_level" not in st.session_state:
+        st.session_state.sb_budget_level = "mid_range"
+    if "sb_pace" not in st.session_state:
+        st.session_state.sb_pace = "moderate"
+    if "sb_traveler_type" not in st.session_state:
+        st.session_state.sb_traveler_type = "solo"
 
-# Apply any pending sidebar prefill BEFORE widgets are instantiated
-if st.session_state.pending_prefill:
-    _prefill_sidebar(st.session_state.pending_prefill)
-    st.session_state.pending_prefill = None
+    # Apply any pending sidebar prefill BEFORE widgets are instantiated
+    if st.session_state.pending_prefill:
+        _prefill_sidebar(st.session_state.pending_prefill)
+        st.session_state.pending_prefill = None
 
 
 # ── rendering helpers ─────────────────────────────────────────────────────────
@@ -675,300 +750,301 @@ def _run_graph(state: dict) -> dict:
 
 # ── sidebar ───────────────────────────────────────────────────────────────────
 
-with st.sidebar:
-    st.title("✈️ Travel Advisor")
-    st.markdown("Plan trips and answer travel questions using AI + real-time web search.")
-    st.divider()
-
-    st.subheader("Trip Details")
-
-    destination = st.text_input(
-        "Destination(s) *",
-        placeholder="e.g., Paris  |  Tokyo + Kyoto",
-        help="Required for itinerary generation.",
-        key="sb_destination",
-    )
-    col_d, col_s = st.columns(2)
-    with col_d:
-        duration_days = st.number_input("Duration (days)", min_value=1, max_value=60, step=1, key="sb_duration_days")
-    with col_s:
-        start_date = st.date_input("Start Date (opt.)", key="sb_start_date")
-
-    origin = st.text_input("Departing From (opt.)", placeholder="e.g., London", key="sb_origin")
-    returning_to = st.text_input("Returning To (opt.)", placeholder="e.g., London", key="sb_returning_to")
-
-    interests = st.multiselect(
-        "Interests",
-        _ALL_INTERESTS,
-        key="sb_interests",
-    )
-
-    budget_level = st.select_slider(
-        "Budget Level",
-        options=["budget", "mid_range", "luxury"],
-        key="sb_budget_level",
-    )
-    pace = st.select_slider(
-        "Travel Pace",
-        options=["relaxed", "moderate", "packed"],
-        key="sb_pace",
-    )
-    traveler_type = st.selectbox(
-        "Traveler Type",
-        ["solo", "couple", "family", "group"],
-        key="sb_traveler_type",
-    )
-    constraints_raw = st.text_area(
-        "Special Constraints (opt.)",
-        placeholder="e.g., wheelchair accessible, vegetarian only, no flying",
-        key="sb_constraints",
-    )
-
-    st.divider()
-
-    btn_col1, btn_col2 = st.columns(2)
-    with btn_col1:
-        generate_clicked = st.button("🗓️ Generate Itinerary", type="primary", use_container_width=True)
-    with btn_col2:
-        refine_clicked = st.button("✏️ Refine Plan", use_container_width=True)
-
-    ask_q_clicked = st.button("❓ Ask a Travel Question", use_container_width=True)
-
-    if st.button("🔄 Reset", use_container_width=True):
-        st.session_state.agent_state = build_initial_state()
-        st.session_state.show_refine_input = False
-        st.session_state.packing_list = None
-        st.session_state.weather_data = {}
-        st.session_state.weather_label = "forecast"
-        st.rerun()
-
-    # ── cost counter ──────────────────────────────────────────────────────────
-    st.divider()
-    call_count = st.session_state.agent_state.get("tool_call_count", 0)
-    max_calls = 9
-    st.caption(f"Searches used: {call_count} / {max_calls}")
-    st.progress(min(call_count / max_calls, 1.0))
-    if call_count > 0:
-        est = call_count * 0.001 + 0.06  # ~$0.001/Tavily + ~$0.06 GPT-4o
-        st.caption(f"Est. cost this session: ~${est:.2f}")
-
-    # ── save / load ───────────────────────────────────────────────────────────
-    st.divider()
-    _itinerary = st.session_state.agent_state.get("itinerary_response")
-    if _itinerary:
-        _dest = _itinerary.get("data", {}).get("destination", "itinerary")
-        _fname = f"{_dest.replace(' ', '_').lower()}_itinerary.json"
-        st.download_button(
-            "💾 Save Itinerary",
-            data=json.dumps(_itinerary, indent=2),
-            file_name=_fname,
-            mime="application/json",
-            use_container_width=True,
-        )
-    _uploaded = st.file_uploader("📂 Load saved itinerary", type="json", label_visibility="collapsed")
-    if _uploaded:
-        _loaded = json.loads(_uploaded.read())
-        # Support both raw itinerary JSON and history-entry JSON (which includes trip_request)
-        if "itinerary" in _loaded and "trip_request" in _loaded:
-            _it_data = _loaded["itinerary"]
-            _req_data = _loaded.get("trip_request") or {}
-        else:
-            _it_data = _loaded
-            _req_data = {}
-        st.session_state.agent_state["final_response"] = _it_data
-        st.session_state.agent_state["itinerary_response"] = _it_data
-        st.session_state.agent_state["trip_request"] = _req_data
-        st.session_state.packing_list = None
-        st.session_state.weather_data = {}
-        if _req_data:
-            st.session_state.pending_prefill = _req_data
-        st.rerun()
-
-    # ── history ───────────────────────────────────────────────────────────────
-    _history = _load_history()
-    if _history:
+if _in_streamlit:
+    with st.sidebar:
+        st.title("✈️ Travel Advisor")
+        st.markdown("Plan trips and answer travel questions using AI + real-time web search.")
         st.divider()
-        st.caption("Recent trips")
-        for _entry in _history[:5]:
-            _label = f"🗺️ {_entry['destination']}"
-            _help = _entry.get("saved_at", "")
-            if st.button(_label, key=f"hist_{_entry['destination']}_{_help}",
-                         help=_help, use_container_width=True):
-                _it = _entry["itinerary"]
-                _req = _entry.get("trip_request") or {}
-                st.session_state.agent_state["final_response"] = _it
-                st.session_state.agent_state["itinerary_response"] = _it
-                st.session_state.agent_state["trip_request"] = _req
-                st.session_state.packing_list = None
-                st.session_state.weather_data = {}
-                if _req:
-                    st.session_state.pending_prefill = _req
-                st.rerun()
 
-# ── generate itinerary ────────────────────────────────────────────────────────
+        st.subheader("Trip Details")
 
-if generate_clicked:
-    if not destination.strip():
-        st.sidebar.error("Please enter a destination.")
-    else:
-        constraints = [c.strip() for c in constraints_raw.split(",") if c.strip()]
-        normalized_interests = [
-            i.lower().replace(" & ", "_").replace(" ", "_") for i in interests
-        ]
-
-        new_state = build_initial_state()
-        new_state["user_profile"] = {"traveler_type": traveler_type}
-        new_state["intent"] = "planning"
-        new_state["trip_request"] = {
-            "destination": destination.strip(),
-            "duration_days": int(duration_days),
-            "start_date": str(start_date) if start_date else None,
-            "origin": origin.strip() or None,
-            "returning_to": returning_to.strip() or None,
-            "interests": normalized_interests,
-            "budget_level": budget_level,
-            "pace": pace,
-            "constraints": constraints,
-        }
-        new_state["collected_info"] = {
-            "has_destination": True,
-            "has_duration": True,
-            "has_dates": bool(start_date),
-            "has_interests": bool(interests),
-            "has_budget": True,
-            "is_complete_for_planning": True,
-        }
-        user_msg = (
-            f"Plan a {duration_days}-day trip to {destination.strip()}. "
-            f"Traveler type: {traveler_type}. Budget: {budget_level}. Pace: {pace}. "
-            f"Interests: {', '.join(interests) or 'general sightseeing'}. "
-            f"Constraints: {', '.join(constraints) or 'none'}."
+        destination = st.text_input(
+            "Destination(s) *",
+            placeholder="e.g., Paris  |  Tokyo + Kyoto",
+            help="Required for itinerary generation.",
+            key="sb_destination",
         )
-        if origin:
-            user_msg += f" Departing from {origin}."
-        if returning_to:
-            user_msg += f" Returning to {returning_to}."
-        if start_date:
-            user_msg += f" Start date: {start_date}."
-        new_state["messages"] = [{"role": "user", "content": user_msg}]
+        col_d, col_s = st.columns(2)
+        with col_d:
+            duration_days = st.number_input("Duration (days)", min_value=1, max_value=60, step=1, key="sb_duration_days")
+        with col_s:
+            start_date = st.date_input("Start Date (opt.)", key="sb_start_date")
 
-        result_state = _run_graph(new_state)
-        st.session_state.agent_state = result_state
-        if result_state.get("itinerary_response"):
-            _save_to_history(result_state["itinerary_response"], result_state.get("trip_request"))
-        st.rerun()
+        origin = st.text_input("Departing From (opt.)", placeholder="e.g., London", key="sb_origin")
+        returning_to = st.text_input("Returning To (opt.)", placeholder="e.g., London", key="sb_returning_to")
 
-# ── refine plan ───────────────────────────────────────────────────────────────
+        interests = st.multiselect(
+            "Interests",
+            _ALL_INTERESTS,
+            key="sb_interests",
+        )
 
-if refine_clicked:
-    st.session_state.show_refine_input = True
+        budget_level = st.select_slider(
+            "Budget Level",
+            options=["budget", "mid_range", "luxury"],
+            key="sb_budget_level",
+        )
+        pace = st.select_slider(
+            "Travel Pace",
+            options=["relaxed", "moderate", "packed"],
+            key="sb_pace",
+        )
+        traveler_type = st.selectbox(
+            "Traveler Type",
+            ["solo", "couple", "family", "group"],
+            key="sb_traveler_type",
+        )
+        constraints_raw = st.text_area(
+            "Special Constraints (opt.)",
+            placeholder="e.g., wheelchair accessible, vegetarian only, no flying",
+            key="sb_constraints",
+        )
 
-if st.session_state.show_refine_input:
-    refine_text = st.sidebar.text_area(
-        "What would you like to change?",
-        placeholder="e.g., Add more food experiences on day 2",
-    )
-    if st.sidebar.button("Submit Refinement", type="primary"):
-        if refine_text.strip():
-            state = dict(st.session_state.agent_state)
-            msgs = list(state.get("messages", []))
-            msgs.append({"role": "user", "content": refine_text.strip()})
-            state["messages"] = msgs
-            state["tavily_context"] = []
-            state["tool_call_count"] = 0
-            state["final_response"] = None
-            state["needs_clarification"] = False
-            result_state = _run_graph(state)
-            st.session_state.agent_state = result_state
+        st.divider()
+
+        btn_col1, btn_col2 = st.columns(2)
+        with btn_col1:
+            generate_clicked = st.button("🗓️ Generate Itinerary", type="primary", use_container_width=True)
+        with btn_col2:
+            refine_clicked = st.button("✏️ Refine Plan", use_container_width=True)
+
+        ask_q_clicked = st.button("❓ Ask a Travel Question", use_container_width=True)
+
+        if st.button("🔄 Reset", use_container_width=True):
+            st.session_state.agent_state = build_initial_state()
             st.session_state.show_refine_input = False
+            st.session_state.packing_list = None
+            st.session_state.weather_data = {}
+            st.session_state.weather_label = "forecast"
             st.rerun()
 
-# ── main area ─────────────────────────────────────────────────────────────────
-
-st.title("Travel Advisor Agent ✈️")
-st.caption("Powered by OpenAI + Tavily real-time web search + LangGraph")
-
-agent_state = st.session_state.agent_state
-messages = agent_state.get("messages", [])
-final_response = agent_state.get("final_response")
-itinerary_response = agent_state.get("itinerary_response")
-
-# Chat history
-for msg in messages:
-    role = msg.get("role", "user")
-    content = msg.get("content", "")
-    with st.chat_message(role):
-        st.write(content)
-
-# Always show the itinerary if one has been generated
-if itinerary_response:
-    st.divider()
-    _render_itinerary(itinerary_response.get("data", {}), weather=st.session_state.weather_data or None, weather_label=st.session_state.weather_label)
-
-    # ── action buttons below itinerary ────────────────────────────────────────
-    btn_a, btn_b, _spacer = st.columns([1, 1, 3])
-    with btn_a:
-        if st.button("🎒 Generate Packing List", use_container_width=True):
-            with st.spinner("Generating packing list..."):
-                result = _generate_packing_list(itinerary_response.get("data", {}))
-            if result:
-                st.session_state.packing_list = result
-                st.rerun()
-            else:
-                st.error("Could not generate packing list. Please try again.")
-
-    _trip_req = agent_state.get("trip_request") or {}
-    _start_date = _trip_req.get("start_date")
-    # Fall back to the sidebar date widget for trips loaded from history without a stored start_date
-    if not _start_date and "sb_start_date" in st.session_state:
-        _sb_date = st.session_state["sb_start_date"]
-        if _sb_date:
-            _start_date = str(_sb_date)
-    with btn_b:
-        _weather_label = "🌤️ Refresh Weather" if st.session_state.weather_data else "🌤️ Add Weather Forecast"
-        _weather_disabled = not bool(_start_date)
-        _weather_help = "Set a Start Date in the sidebar to enable weather forecasts." if _weather_disabled else None
-        if st.button(_weather_label, use_container_width=True,
-                     disabled=_weather_disabled, help=_weather_help):
-            _itin_data = itinerary_response.get("data", {})
-            _dest_for_geo = _itin_data.get("destination", "")
-            _duration = _trip_req.get("duration_days", 7)
-            with st.spinner("Fetching weather (per city)..." if "," in _dest_for_geo or "+" in _dest_for_geo else "Fetching weather forecast..."):
-                _weather_map, _wlabel = _build_weather_map(_dest_for_geo, _start_date, int(_duration), _itin_data)
-            if _weather_map:
-                st.session_state.weather_data = _weather_map
-                st.session_state.weather_label = _wlabel
-                if _wlabel == "typical":
-                    st.info("Showing typical weather from the same dates last year — your trip is more than 16 days away.")
-                st.rerun()
-            else:
-                st.warning("Could not fetch weather data for this destination and date range.")
-
-    if st.session_state.packing_list:
+        # ── cost counter ──────────────────────────────────────────────────────────
         st.divider()
-        _render_packing_list(st.session_state.packing_list)
+        call_count = st.session_state.agent_state.get("tool_call_count", 0)
+        max_calls = 9
+        st.caption(f"Searches used: {call_count} / {max_calls}")
+        st.progress(min(call_count / max_calls, 1.0))
+        if call_count > 0:
+            est = call_count * 0.001 + 0.06  # ~$0.001/Tavily + ~$0.06 GPT-4o
+            st.caption(f"Est. cost this session: ~${est:.2f}")
 
-# Show the latest Q&A answer or clarification below the itinerary
-if final_response and final_response.get("type") != "itinerary":
-    resp_type = final_response.get("type")
-    data = final_response.get("data", {})
-    st.divider()
-    if resp_type == "answer":
-        _render_answer(data)
-    elif resp_type == "clarification":
-        _render_clarification(data)
+        # ── save / load ───────────────────────────────────────────────────────────
+        st.divider()
+        _itinerary = st.session_state.agent_state.get("itinerary_response")
+        if _itinerary:
+            _dest = _itinerary.get("data", {}).get("destination", "itinerary")
+            _fname = f"{_dest.replace(' ', '_').lower()}_itinerary.json"
+            st.download_button(
+                "💾 Save Itinerary",
+                data=json.dumps(_itinerary, indent=2),
+                file_name=_fname,
+                mime="application/json",
+                use_container_width=True,
+            )
+        _uploaded = st.file_uploader("📂 Load saved itinerary", type="json", label_visibility="collapsed")
+        if _uploaded:
+            _loaded = json.loads(_uploaded.read())
+            # Support both raw itinerary JSON and history-entry JSON (which includes trip_request)
+            if "itinerary" in _loaded and "trip_request" in _loaded:
+                _it_data = _loaded["itinerary"]
+                _req_data = _loaded.get("trip_request") or {}
+            else:
+                _it_data = _loaded
+                _req_data = {}
+            st.session_state.agent_state["final_response"] = _it_data
+            st.session_state.agent_state["itinerary_response"] = _it_data
+            st.session_state.agent_state["trip_request"] = _req_data
+            st.session_state.packing_list = None
+            st.session_state.weather_data = {}
+            if _req_data:
+                st.session_state.pending_prefill = _req_data
+            st.rerun()
 
-# Chat input for follow-up Q&A
-if prompt := st.chat_input("Ask a follow-up or travel question..."):
-    state = dict(st.session_state.agent_state)
-    msgs = list(state.get("messages", []))
-    msgs.append({"role": "user", "content": prompt})
-    state["messages"] = msgs
-    state["intent"] = "unknown"  # re-classify each new chat message from scratch
-    state["tavily_context"] = []
-    state["tool_call_count"] = 0
-    state["final_response"] = None
-    state["needs_clarification"] = False
-    result_state = _run_graph(state)
-    st.session_state.agent_state = result_state
-    st.rerun()
+        # ── history ───────────────────────────────────────────────────────────────
+        _history = _load_history()
+        if _history:
+            st.divider()
+            st.caption("Recent trips")
+            for _entry in _history[:5]:
+                _label = f"🗺️ {_entry['destination']}"
+                _help = _entry.get("saved_at", "")
+                if st.button(_label, key=f"hist_{_entry['destination']}_{_help}",
+                             help=_help, use_container_width=True):
+                    _it = _entry["itinerary"]
+                    _req = _entry.get("trip_request") or {}
+                    st.session_state.agent_state["final_response"] = _it
+                    st.session_state.agent_state["itinerary_response"] = _it
+                    st.session_state.agent_state["trip_request"] = _req
+                    st.session_state.packing_list = None
+                    st.session_state.weather_data = {}
+                    if _req:
+                        st.session_state.pending_prefill = _req
+                    st.rerun()
+
+    # ── generate itinerary ────────────────────────────────────────────────────────
+
+    if generate_clicked:
+        if not destination.strip():
+            st.sidebar.error("Please enter a destination.")
+        else:
+            constraints = [c.strip() for c in constraints_raw.split(",") if c.strip()]
+            normalized_interests = [
+                i.lower().replace(" & ", "_").replace(" ", "_") for i in interests
+            ]
+
+            new_state = build_initial_state()
+            new_state["user_profile"] = {"traveler_type": traveler_type}
+            new_state["intent"] = "planning"
+            new_state["trip_request"] = {
+                "destination": destination.strip(),
+                "duration_days": int(duration_days),
+                "start_date": str(start_date) if start_date else None,
+                "origin": origin.strip() or None,
+                "returning_to": returning_to.strip() or None,
+                "interests": normalized_interests,
+                "budget_level": budget_level,
+                "pace": pace,
+                "constraints": constraints,
+            }
+            new_state["collected_info"] = {
+                "has_destination": True,
+                "has_duration": True,
+                "has_dates": bool(start_date),
+                "has_interests": bool(interests),
+                "has_budget": True,
+                "is_complete_for_planning": True,
+            }
+            user_msg = (
+                f"Plan a {duration_days}-day trip to {destination.strip()}. "
+                f"Traveler type: {traveler_type}. Budget: {budget_level}. Pace: {pace}. "
+                f"Interests: {', '.join(interests) or 'general sightseeing'}. "
+                f"Constraints: {', '.join(constraints) or 'none'}."
+            )
+            if origin:
+                user_msg += f" Departing from {origin}."
+            if returning_to:
+                user_msg += f" Returning to {returning_to}."
+            if start_date:
+                user_msg += f" Start date: {start_date}."
+            new_state["messages"] = [{"role": "user", "content": user_msg}]
+
+            result_state = _run_graph(new_state)
+            st.session_state.agent_state = result_state
+            if result_state.get("itinerary_response"):
+                _save_to_history(result_state["itinerary_response"], result_state.get("trip_request"))
+            st.rerun()
+
+    # ── refine plan ───────────────────────────────────────────────────────────────
+
+    if refine_clicked:
+        st.session_state.show_refine_input = True
+
+    if st.session_state.show_refine_input:
+        refine_text = st.sidebar.text_area(
+            "What would you like to change?",
+            placeholder="e.g., Add more food experiences on day 2",
+        )
+        if st.sidebar.button("Submit Refinement", type="primary"):
+            if refine_text.strip():
+                state = dict(st.session_state.agent_state)
+                msgs = list(state.get("messages", []))
+                msgs.append({"role": "user", "content": refine_text.strip()})
+                state["messages"] = msgs
+                state["tavily_context"] = []
+                state["tool_call_count"] = 0
+                state["final_response"] = None
+                state["needs_clarification"] = False
+                result_state = _run_graph(state)
+                st.session_state.agent_state = result_state
+                st.session_state.show_refine_input = False
+                st.rerun()
+
+    # ── main area ─────────────────────────────────────────────────────────────────
+
+    st.title("Travel Advisor Agent ✈️")
+    st.caption("Powered by OpenAI + Tavily real-time web search + LangGraph")
+
+    agent_state = st.session_state.agent_state
+    messages = agent_state.get("messages", [])
+    final_response = agent_state.get("final_response")
+    itinerary_response = agent_state.get("itinerary_response")
+
+    # Chat history
+    for msg in messages:
+        role = msg.get("role", "user")
+        content = msg.get("content", "")
+        with st.chat_message(role):
+            st.write(content)
+
+    # Always show the itinerary if one has been generated
+    if itinerary_response:
+        st.divider()
+        _render_itinerary(itinerary_response.get("data", {}), weather=st.session_state.weather_data or None, weather_label=st.session_state.weather_label)
+
+        # ── action buttons below itinerary ────────────────────────────────────────
+        btn_a, btn_b, _spacer = st.columns([1, 1, 3])
+        with btn_a:
+            if st.button("🎒 Generate Packing List", use_container_width=True):
+                with st.spinner("Generating packing list..."):
+                    result = _generate_packing_list(itinerary_response.get("data", {}))
+                if result:
+                    st.session_state.packing_list = result
+                    st.rerun()
+                else:
+                    st.error("Could not generate packing list. Please try again.")
+
+        _trip_req = agent_state.get("trip_request") or {}
+        _start_date = _trip_req.get("start_date")
+        # Fall back to the sidebar date widget for trips loaded from history without a stored start_date
+        if not _start_date and "sb_start_date" in st.session_state:
+            _sb_date = st.session_state["sb_start_date"]
+            if _sb_date:
+                _start_date = str(_sb_date)
+        with btn_b:
+            _weather_label = "🌤️ Refresh Weather" if st.session_state.weather_data else "🌤️ Add Weather Forecast"
+            _weather_disabled = not bool(_start_date)
+            _weather_help = "Set a Start Date in the sidebar to enable weather forecasts." if _weather_disabled else None
+            if st.button(_weather_label, use_container_width=True,
+                         disabled=_weather_disabled, help=_weather_help):
+                _itin_data = itinerary_response.get("data", {})
+                _dest_for_geo = _itin_data.get("destination", "")
+                _duration = _trip_req.get("duration_days", 7)
+                with st.spinner("Fetching weather (per city)..." if "," in _dest_for_geo or "+" in _dest_for_geo else "Fetching weather forecast..."):
+                    _weather_map, _wlabel = _build_weather_map(_dest_for_geo, _start_date, int(_duration), _itin_data)
+                if _weather_map:
+                    st.session_state.weather_data = _weather_map
+                    st.session_state.weather_label = _wlabel
+                    if _wlabel == "typical":
+                        st.info("Showing typical weather from the same dates last year — your trip is more than 16 days away.")
+                    st.rerun()
+                else:
+                    st.warning("Could not fetch weather data for this destination and date range.")
+
+        if st.session_state.packing_list:
+            st.divider()
+            _render_packing_list(st.session_state.packing_list)
+
+    # Show the latest Q&A answer or clarification below the itinerary
+    if final_response and final_response.get("type") != "itinerary":
+        resp_type = final_response.get("type")
+        data = final_response.get("data", {})
+        st.divider()
+        if resp_type == "answer":
+            _render_answer(data)
+        elif resp_type == "clarification":
+            _render_clarification(data)
+
+    # Chat input for follow-up Q&A
+    if prompt := st.chat_input("Ask a follow-up or travel question..."):
+        state = dict(st.session_state.agent_state)
+        msgs = list(state.get("messages", []))
+        msgs.append({"role": "user", "content": prompt})
+        state["messages"] = msgs
+        state["intent"] = "unknown"  # re-classify each new chat message from scratch
+        state["tavily_context"] = []
+        state["tool_call_count"] = 0
+        state["final_response"] = None
+        state["needs_clarification"] = False
+        result_state = _run_graph(state)
+        st.session_state.agent_state = result_state
+        st.rerun()
