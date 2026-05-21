@@ -439,6 +439,14 @@ if _in_streamlit:
         st.session_state.pending_prefill = None
     if "geocode_cache" not in st.session_state:
         st.session_state.geocode_cache = {}  # location string → (lat, lon) or None
+    if "flight_results" not in st.session_state:
+        st.session_state.flight_results = []
+    if "hotel_results" not in st.session_state:
+        st.session_state.hotel_results = []
+    if "flight_search_done" not in st.session_state:
+        st.session_state.flight_search_done = False
+    if "hotel_search_done" not in st.session_state:
+        st.session_state.hotel_search_done = False
     # Sidebar widget defaults — only set once; _prefill_sidebar overwrites these on history load
     if "sb_duration_days" not in st.session_state:
         st.session_state.sb_duration_days = 5
@@ -895,6 +903,10 @@ if _in_streamlit:
                     st.session_state.agent_state["trip_request"] = _req
                     st.session_state.packing_list = None
                     st.session_state.weather_data = {}
+                    st.session_state.flight_results = []
+                    st.session_state.hotel_results = []
+                    st.session_state.flight_search_done = False
+                    st.session_state.hotel_search_done = False
                     if _req:
                         st.session_state.pending_prefill = _req
                     st.rerun()
@@ -950,6 +962,10 @@ if _in_streamlit:
             st.session_state.agent_state = result_state
             if result_state.get("itinerary_response"):
                 _save_to_history(result_state["itinerary_response"], result_state.get("trip_request"))
+            st.session_state.flight_results = []
+            st.session_state.hotel_results = []
+            st.session_state.flight_search_done = False
+            st.session_state.hotel_search_done = False
             st.rerun()
 
     # ── refine plan ───────────────────────────────────────────────────────────────
@@ -997,50 +1013,110 @@ if _in_streamlit:
     # Always show the itinerary if one has been generated
     if itinerary_response:
         st.divider()
-        _render_itinerary(itinerary_response.get("data", {}), weather=st.session_state.weather_data or None, weather_label=st.session_state.weather_label)
-
-        # ── action buttons below itinerary ────────────────────────────────────────
-        btn_a, btn_b, _spacer = st.columns([1, 1, 3])
-        with btn_a:
-            if st.button("🎒 Generate Packing List", use_container_width=True):
-                with st.spinner("Generating packing list..."):
-                    result = _generate_packing_list(itinerary_response.get("data", {}))
-                if result:
-                    st.session_state.packing_list = result
-                    st.rerun()
-                else:
-                    st.error("Could not generate packing list. Please try again.")
-
         _trip_req = agent_state.get("trip_request") or {}
         _start_date = _trip_req.get("start_date")
-        # Fall back to the sidebar date widget for trips loaded from history without a stored start_date
         if not _start_date and "sb_start_date" in st.session_state:
             _sb_date = st.session_state["sb_start_date"]
             if _sb_date:
                 _start_date = str(_sb_date)
-        with btn_b:
-            _weather_label = "🌤️ Refresh Weather" if st.session_state.weather_data else "🌤️ Add Weather Forecast"
-            _weather_disabled = not bool(_start_date)
-            _weather_help = "Set a Start Date in the sidebar to enable weather forecasts." if _weather_disabled else None
-            if st.button(_weather_label, use_container_width=True,
-                         disabled=_weather_disabled, help=_weather_help):
-                _itin_data = itinerary_response.get("data", {})
-                _dest_for_geo = _itin_data.get("destination", "")
-                _duration = _trip_req.get("duration_days", 7)
-                with st.spinner("Fetching weather (per city)..." if "," in _dest_for_geo or "+" in _dest_for_geo else "Fetching weather forecast..."):
-                    _weather_map, _wlabel = _build_weather_map(_dest_for_geo, _start_date, int(_duration), _itin_data)
-                if _weather_map:
-                    st.session_state.weather_data = _weather_map
-                    st.session_state.weather_label = _wlabel
-                    if _wlabel == "typical":
-                        st.info("Showing typical weather from the same dates last year — your trip is more than 16 days away.")
-                    st.rerun()
-                else:
-                    st.warning("Could not fetch weather data for this destination and date range.")
 
-        if st.session_state.packing_list:
-            st.divider()
-            _render_packing_list(st.session_state.packing_list)
+        tab_itin, tab_flights, tab_hotels = st.tabs(["🗺️ Itinerary", "✈️ Flights", "🏨 Hotels"])
+
+        with tab_itin:
+            _render_itinerary(
+                itinerary_response.get("data", {}),
+                weather=st.session_state.weather_data or None,
+                weather_label=st.session_state.weather_label,
+            )
+            btn_a, btn_b, _spacer = st.columns([1, 1, 3])
+            with btn_a:
+                if st.button("🎒 Generate Packing List", use_container_width=True):
+                    with st.spinner("Generating packing list..."):
+                        result = _generate_packing_list(itinerary_response.get("data", {}))
+                    if result:
+                        st.session_state.packing_list = result
+                        st.rerun()
+                    else:
+                        st.error("Could not generate packing list. Please try again.")
+            with btn_b:
+                _weather_label = "🌤️ Refresh Weather" if st.session_state.weather_data else "🌤️ Add Weather Forecast"
+                _weather_disabled = not bool(_start_date)
+                _weather_help = "Set a Start Date in the sidebar to enable weather forecasts." if _weather_disabled else None
+                if st.button(_weather_label, use_container_width=True,
+                             disabled=_weather_disabled, help=_weather_help):
+                    _itin_data = itinerary_response.get("data", {})
+                    _dest_for_geo = _itin_data.get("destination", "")
+                    _duration = _trip_req.get("duration_days", 7)
+                    with st.spinner(
+                        "Fetching weather (per city)..."
+                        if "," in _dest_for_geo or "+" in _dest_for_geo
+                        else "Fetching weather forecast..."
+                    ):
+                        _weather_map, _wlabel = _build_weather_map(
+                            _dest_for_geo, _start_date, int(_duration), _itin_data
+                        )
+                    if _weather_map:
+                        st.session_state.weather_data = _weather_map
+                        st.session_state.weather_label = _wlabel
+                        if _wlabel == "typical":
+                            st.info("Showing typical weather from the same dates last year — your trip is more than 16 days away.")
+                        st.rerun()
+                    else:
+                        st.warning("Could not fetch weather data for this destination and date range.")
+            if st.session_state.packing_list:
+                st.divider()
+                _render_packing_list(st.session_state.packing_list)
+
+        with tab_flights:
+            _dest = (_trip_req.get("destination") or "").strip()
+            _origin = (_trip_req.get("origin") or "").strip()
+            if not _origin:
+                _origin = st.text_input(
+                    "✈️ Flying from (city or airport code)",
+                    key="flight_origin_input",
+                    placeholder="e.g. New York",
+                )
+            if _origin and _dest and not st.session_state.flight_search_done:
+                with st.spinner(f"Searching flights from {_origin} to {_dest}..."):
+                    st.session_state.flight_results = search_flights(_origin, _dest, _start_date or "")
+                st.session_state.flight_search_done = True
+            if st.session_state.flight_search_done:
+                flights = st.session_state.flight_results
+                if not flights:
+                    st.info("No flight results found. Try refining your origin or destination.")
+                else:
+                    st.markdown(
+                        "".join(_render_flight_card(f, highlight=(i == 0)) for i, f in enumerate(flights)),
+                        unsafe_allow_html=True,
+                    )
+                    st.caption("⚠️ Prices sourced from web search — verify on the booking site before purchasing. Powered by Tavily.")
+                if st.button("🔄 Refresh Flight Search", key="refresh_flights"):
+                    st.session_state.flight_search_done = False
+                    st.session_state.flight_results = []
+                    st.rerun()
+
+        with tab_hotels:
+            _dest = (_trip_req.get("destination") or "").strip()
+            _duration = int(_trip_req.get("duration_days") or 5)
+            _budget = _trip_req.get("budget_level", "mid_range")
+            if _dest and not st.session_state.hotel_search_done:
+                with st.spinner(f"Searching hotels in {_dest}..."):
+                    st.session_state.hotel_results = search_hotels(_dest, _start_date or "", _duration, _budget)
+                st.session_state.hotel_search_done = True
+            if st.session_state.hotel_search_done:
+                hotels = st.session_state.hotel_results
+                if not hotels:
+                    st.info("No hotel results found. Try refining your destination or dates.")
+                else:
+                    st.markdown(
+                        "".join(_render_hotel_card(h, highlight=(i == 0)) for i, h in enumerate(hotels)),
+                        unsafe_allow_html=True,
+                    )
+                    st.caption("⚠️ Prices sourced from web search — verify on the booking site before purchasing. Powered by Tavily.")
+                if st.button("🔄 Refresh Hotel Search", key="refresh_hotels"):
+                    st.session_state.hotel_search_done = False
+                    st.session_state.hotel_results = []
+                    st.rerun()
 
     # Show the latest Q&A answer or clarification below the itinerary
     if final_response and final_response.get("type") != "itinerary":
