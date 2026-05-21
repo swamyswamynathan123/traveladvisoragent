@@ -15,6 +15,8 @@ import streamlit as st
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 
+load_dotenv()  # must precede local imports so os.getenv() reads .env values
+
 from graph import build_graph, build_initial_state
 from prompts import PACKING_LIST_PROMPT
 from schemas import PackingListResponse
@@ -409,7 +411,6 @@ def _render_hotel_card(h: dict, highlight: bool) -> str:
     )
 
 
-load_dotenv()
 logging.basicConfig(level=logging.INFO)
 
 _in_streamlit = getattr(getattr(st, "runtime", None), "exists", lambda: False)()
