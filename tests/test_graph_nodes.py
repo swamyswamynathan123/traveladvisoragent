@@ -462,3 +462,28 @@ def test_should_check_personalization_planning():
 def test_should_check_personalization_question():
     from graph import should_check_personalization
     assert should_check_personalization({"intent": "question"}) == "respond_to_user"
+
+
+def test_generate_itinerary_uses_streaming_llm():
+    from graph import _generate_itinerary
+    from schemas import ItineraryResponse, DayPlan, TimeBlock
+
+    minimal_response = ItineraryResponse(
+        destination="Paris",
+        duration="3 days",
+        itinerary=[DayPlan(day_number=1, theme="Arrival",
+                           blocks=[TimeBlock(time_of_day="morning", activity="Arrive")])],
+        logistics_notes="By train.",
+    )
+
+    with patch("graph._llm") as mock_llm_fn:
+        mock_llm = MagicMock()
+        mock_structured = MagicMock()
+        mock_structured.invoke.return_value = minimal_response
+        mock_llm.with_structured_output.return_value = mock_structured
+        mock_llm_fn.return_value = mock_llm
+
+        result = _generate_itinerary(_planning_state())
+
+    mock_llm_fn.assert_called_once_with(model="gpt-4o", temperature=0.3, streaming=True)
+    assert result["final_response"]["type"] == "itinerary"
