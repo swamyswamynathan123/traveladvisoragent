@@ -477,6 +477,39 @@ def _render_itinerary(data: dict, weather: dict | None = None, weather_label: st
         header += f" ({ttype})"
     st.subheader(header)
 
+    budget = data.get("budget_estimate")
+    if budget:
+        with st.expander("💰 Budget Estimate", expanded=True):
+            for item in budget.get("line_items", []):
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    st.write(item.get("category", ""))
+                    if item.get("notes"):
+                        st.caption(item["notes"])
+                with col2:
+                    low = item.get("low_usd", 0)
+                    high = item.get("high_usd", 0)
+                    st.markdown(f"${low:,}–${high:,}")
+            st.divider()
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                st.markdown("**Total (per person)**")
+            with col2:
+                plow = budget.get("per_person_low_usd", 0)
+                phigh = budget.get("per_person_high_usd", 0)
+                st.markdown(f"**${plow:,}–${phigh:,}**")
+            num = budget.get("num_travelers", 1)
+            if num > 1:
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    st.markdown(f"**Total ({num} travelers)**")
+                with col2:
+                    glow = budget.get("group_low_usd", 0)
+                    ghigh = budget.get("group_high_usd", 0)
+                    st.markdown(f"**${glow:,}–${ghigh:,}**")
+            if budget.get("currency_note"):
+                st.caption(budget["currency_note"])
+
     for day in data.get("itinerary", []):
         day_num = day.get("day_number", "?")
         theme = day.get("theme", "")
