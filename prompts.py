@@ -104,6 +104,19 @@ logistics_notes must cover:
 4. Allocate remaining days to each city proportionally to the total trip length (e.g. 8 days across 3 cities → roughly 2–3 days each, adjusted for distance and highlights).
 5. In logistics_notes, list the full inter-city transport sequence with estimated cost at {budget_level} tier.
 
+=== BUDGET ESTIMATE RULES ===
+Populate budget_estimate with realistic USD cost ranges for this trip:
+• line_items: exactly 4 items in this order:
+  1. "Flights" — round-trip per person. Use the origin field from the trip request above if known; otherwise assume a major international hub.
+  2. "Hotels" — total accommodation cost per person for all nights at {budget_level} tier.
+  3. "Food & Dining" — total food cost per person for all days at {budget_level} tier.
+  4. "Activities" — total admission fees, tours, and local transport per person.
+• per_person_low_usd / per_person_high_usd: sum of all four line item lows/highs.
+• group_low_usd / group_high_usd: per_person × num_travelers.
+• num_travelers: 1 for solo, 2 for couple, 3 for family, 4 for group.
+• currency_note: "All estimates in USD. Actual costs vary by season and availability."
+• Use Tavily search results for pricing signals where available; fall back to training knowledge.
+
 Generate a complete itinerary. Return ONLY valid JSON matching this schema exactly:
 {schema}
 
