@@ -102,6 +102,23 @@ class RestaurantSuggestion(BaseModel):
     notes: Optional[str] = None
 
 
+class BudgetLineItem(BaseModel):
+    category: str
+    low_usd: int
+    high_usd: int
+    notes: Optional[str] = None
+
+
+class BudgetEstimate(BaseModel):
+    line_items: List[BudgetLineItem]
+    per_person_low_usd: int
+    per_person_high_usd: int
+    group_low_usd: int
+    group_high_usd: int
+    num_travelers: int
+    currency_note: str
+
+
 class ItineraryResponse(BaseModel):
     destination: str
     duration: str
@@ -114,6 +131,7 @@ class ItineraryResponse(BaseModel):
     assumptions: List[str] = Field(default_factory=list)
     open_questions: List[str] = Field(default_factory=list)
     sources: List[Source] = Field(default_factory=list)
+    budget_estimate: Optional[BudgetEstimate] = None
 
 
 class QuestionResponse(BaseModel):
