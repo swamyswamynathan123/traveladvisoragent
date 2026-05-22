@@ -63,11 +63,11 @@ def build_initial_state() -> dict:
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
-def _llm(model: str = "gpt-4o-mini", temperature: float = 0.0):
+def _llm(model: str = "gpt-4o-mini", temperature: float = 0.0, streaming: bool = False):
     if model.startswith("claude"):
         from langchain_anthropic import ChatAnthropic
         return ChatAnthropic(model=model, temperature=temperature)
-    return ChatOpenAI(model=model, temperature=temperature)
+    return ChatOpenAI(model=model, temperature=temperature, streaming=streaming)
 
 
 def _format_tavily_context(tavily_context: list) -> str:
@@ -371,7 +371,7 @@ def generate_response_node(state: dict) -> dict:
 
 
 def _generate_itinerary(state: dict) -> dict:
-    llm = _llm(model="gpt-4o", temperature=0.3)
+    llm = _llm(model="gpt-4o", temperature=0.3, streaming=True)
     schema_str = json.dumps(ItineraryResponse.model_json_schema(), indent=2)
     trip_req = state.get("trip_request") or {}
     pace = trip_req.get("pace", "moderate")
@@ -410,7 +410,7 @@ def _generate_itinerary(state: dict) -> dict:
 
 
 def _generate_answer(state: dict) -> dict:
-    llm = _llm(model="gpt-4o", temperature=0.3)
+    llm = _llm(model="gpt-4o", temperature=0.3, streaming=True)
     schema_str = json.dumps(QuestionResponse.model_json_schema(), indent=2)
     q_data = state.get("travel_question") or {}
     trip_req = state.get("trip_request") or {}
