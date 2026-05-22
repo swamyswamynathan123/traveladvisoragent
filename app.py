@@ -762,11 +762,17 @@ class StreamlitTokenCallback(BaseCallbackHandler):
         self._container = container
         self._buffer = ""
 
+    def on_chat_model_start(self, serialized: dict, messages: list, **kwargs) -> None:
+        self._buffer = ""
+
     def on_llm_new_token(self, token: str, **kwargs) -> None:
         self._buffer += token
         self._container.code(self._buffer + "▌", language=None)
 
     def on_llm_end(self, response, **kwargs) -> None:
+        self._container.empty()
+
+    def on_llm_error(self, error: BaseException, **kwargs) -> None:
         self._container.empty()
 
 
