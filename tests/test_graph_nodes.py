@@ -487,3 +487,29 @@ def test_generate_itinerary_uses_streaming_llm():
 
     mock_llm_fn.assert_called_once_with(model="gpt-4o", temperature=0.3, streaming=True)
     assert result["final_response"]["type"] == "itinerary"
+
+
+def test_generate_answer_uses_streaming_llm():
+    from graph import _generate_answer
+    from schemas import QuestionResponse
+    from unittest.mock import patch, MagicMock
+
+    minimal_response = QuestionResponse(
+        answer="Spring is best.",
+        supporting_points=[],
+        assumptions=[],
+        follow_up_questions=[],
+        sources=[],
+    )
+
+    with patch("graph._llm") as mock_llm_fn:
+        mock_llm = MagicMock()
+        mock_structured = MagicMock()
+        mock_structured.invoke.return_value = minimal_response
+        mock_llm.with_structured_output.return_value = mock_structured
+        mock_llm_fn.return_value = mock_llm
+
+        result = _generate_answer(_question_state())
+
+    mock_llm_fn.assert_called_once_with(model="gpt-4o", temperature=0.3, streaming=True)
+    assert result["final_response"]["type"] == "answer"
