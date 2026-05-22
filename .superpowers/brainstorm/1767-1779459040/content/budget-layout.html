@@ -1,0 +1,105 @@
+<h2>How detailed should the budget estimate be?</h2>
+<p class="subtitle">Where and how should the budget breakdown appear in the itinerary?</p>
+
+<div class="cards">
+
+  <!-- Option A -->
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">Travel Advisor — Paris, 5 days</div>
+        <div class="mockup-body" style="padding:10px">
+          <div style="background:#1e2130;border:1px solid #3d4466;border-radius:6px;padding:10px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
+            <span style="color:#7c8cf8;font-size:11px;font-weight:bold">💰 Estimated Trip Cost</span>
+            <span style="color:#4ade80;font-size:13px;font-weight:bold">$1,200 – $1,600</span>
+          </div>
+          <div style="font-size:10px;color:#94a3b8;margin-bottom:6px">▼ Day 1 — Arrival & Eiffel Tower</div>
+          <div style="font-size:10px;color:#94a3b8;margin-bottom:6px">▼ Day 2 — Louvre & Marais</div>
+          <div style="font-size:10px;color:#64748b;font-size:9px">...</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Single total range</h3>
+      <p>One line above the itinerary showing estimated total cost range for the trip. Simple, non-intrusive.</p>
+    </div>
+  </div>
+
+  <!-- Option B -->
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">Travel Advisor — Paris, 5 days</div>
+        <div class="mockup-body" style="padding:10px">
+          <div style="background:#1e2130;border:1px solid #3d4466;border-radius:6px;padding:10px;margin-bottom:8px">
+            <div style="color:#7c8cf8;font-size:11px;font-weight:bold;margin-bottom:6px">💰 Budget Breakdown (per person)</div>
+            <div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:3px">
+              <span style="color:#94a3b8">✈️ Flights</span><span style="color:#e2e8f0">$400–$600</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:3px">
+              <span style="color:#94a3b8">🏨 Hotels (5 nights)</span><span style="color:#e2e8f0">$350–$500</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:3px">
+              <span style="color:#94a3b8">🍽️ Food & Dining</span><span style="color:#e2e8f0">$150–$200</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:3px">
+              <span style="color:#94a3b8">🎟️ Activities</span><span style="color:#e2e8f0">$80–$120</span>
+            </div>
+            <div style="border-top:1px solid #3d4466;margin-top:5px;padding-top:5px;display:flex;justify-content:space-between;font-size:11px">
+              <span style="color:#7c8cf8;font-weight:bold">Total</span><span style="color:#4ade80;font-weight:bold">$980–$1,420</span>
+            </div>
+          </div>
+          <div style="font-size:10px;color:#94a3b8">▼ Day 1 — Arrival & Eiffel Tower</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — Itemized breakdown card</h3>
+      <p>A card above the itinerary with line items: flights, hotels, food, activities, and a total. Per-person estimate.</p>
+    </div>
+  </div>
+
+  <!-- Option C -->
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">Travel Advisor — Paris, 5 days</div>
+        <div class="mockup-body" style="padding:10px">
+          <div style="background:#1e2130;border:1px solid #3d4466;border-radius:6px;padding:8px;margin-bottom:6px">
+            <div style="color:#7c8cf8;font-size:10px;font-weight:bold;margin-bottom:4px">💰 Budget Breakdown</div>
+            <div style="display:flex;gap:6px">
+              <div style="flex:1;text-align:center;background:#111827;border-radius:4px;padding:5px">
+                <div style="color:#64748b;font-size:9px">Flights</div>
+                <div style="color:#e2e8f0;font-size:10px;font-weight:bold">$400–600</div>
+              </div>
+              <div style="flex:1;text-align:center;background:#111827;border-radius:4px;padding:5px">
+                <div style="color:#64748b;font-size:9px">Hotels</div>
+                <div style="color:#e2e8f0;font-size:10px;font-weight:bold">$350–500</div>
+              </div>
+              <div style="flex:1;text-align:center;background:#111827;border-radius:4px;padding:5px">
+                <div style="color:#64748b;font-size:9px">Food</div>
+                <div style="color:#e2e8f0;font-size:10px;font-weight:bold">$150–200</div>
+              </div>
+              <div style="flex:1;text-align:center;background:#111827;border-radius:4px;padding:5px">
+                <div style="color:#64748b;font-size:9px">Activities</div>
+                <div style="color:#e2e8f0;font-size:10px;font-weight:bold">$80–120</div>
+              </div>
+              <div style="flex:1;text-align:center;background:#1a1d2e;border:1px solid #4c5bd4;border-radius:4px;padding:5px">
+                <div style="color:#7c8cf8;font-size:9px">Total</div>
+                <div style="color:#4ade80;font-size:10px;font-weight:bold">$980–1,420</div>
+              </div>
+            </div>
+          </div>
+          <div style="font-size:10px;color:#94a3b8">▼ Day 1 — Arrival &amp; Eiffel Tower</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — Metric tiles</h3>
+      <p>Same data as B but displayed as compact side-by-side tiles instead of a list. More visual, less text.</p>
+    </div>
+  </div>
+
+</div>
+
+<p class="subtitle" style="margin-top:16px">Click your preferred layout, then reply in the terminal.</p>
