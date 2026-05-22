@@ -507,7 +507,10 @@ def personalization_check_node(state: dict) -> dict:
         llm = _llm(model="gpt-4o-mini", temperature=0.0)
         structured_llm = llm.with_structured_output(ItineraryResponse, method="function_calling")
         patched: ItineraryResponse = structured_llm.invoke([HumanMessage(content=prompt)])
-        patched_response = {"type": "itinerary", "data": patched.model_dump()}
+        patched_data = patched.model_dump()
+        if patched_data.get("budget_estimate") is None:
+            patched_data["budget_estimate"] = itinerary_response.get("data", {}).get("budget_estimate")
+        patched_response = {"type": "itinerary", "data": patched_data}
         return {
             **state,
             "final_response": patched_response,
