@@ -492,7 +492,6 @@ def test_generate_itinerary_uses_streaming_llm():
 def test_generate_answer_uses_streaming_llm():
     from graph import _generate_answer
     from schemas import QuestionResponse
-    from unittest.mock import patch, MagicMock
 
     minimal_response = QuestionResponse(
         answer="Spring is best.",
