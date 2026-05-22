@@ -13,6 +13,7 @@ import pandas as pd
 import pydeck as pdk
 import streamlit as st
 from dotenv import load_dotenv
+from langchain_core.callbacks import BaseCallbackHandler
 from langchain_openai import ChatOpenAI
 
 load_dotenv()  # must precede local imports so os.getenv() reads .env values
@@ -756,6 +757,19 @@ def _render_packing_list(pl: PackingListResponse) -> None:
                 st.markdown(f"- {note}")
 
 
+class StreamlitTokenCallback(BaseCallbackHandler):
+    def __init__(self, container) -> None:
+        self._container = container
+        self._buffer = ""
+
+    def on_llm_new_token(self, token: str, **kwargs) -> None:
+        self._buffer += token
+        self._container.code(self._buffer + "▌", language=None)
+
+    def on_llm_end(self, response, **kwargs) -> None:
+        self._container.empty()
+
+
 def _run_graph(state: dict) -> dict:
     _NODE_LABELS = {
         "collect_requirements": "🧠 Understanding your request...",
@@ -768,7 +782,13 @@ def _run_graph(state: dict) -> dict:
     }
     result = state
     with st.status("Working on it...", expanded=True) as status:
-        for chunk in st.session_state.compiled_graph.stream(state, stream_mode="updates"):
+        stream_container = st.empty()
+        cb = StreamlitTokenCallback(stream_container)
+        for chunk in st.session_state.compiled_graph.stream(
+            state,
+            stream_mode="updates",
+            config={"callbacks": [cb]},
+        ):
             for node_name, node_output in chunk.items():
                 st.write(_NODE_LABELS.get(node_name, f"Running {node_name}..."))
                 result = node_output
