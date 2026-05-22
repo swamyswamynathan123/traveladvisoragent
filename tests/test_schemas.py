@@ -188,3 +188,32 @@ def test_hotel_result_list_wraps_results():
     ])
     assert len(hrl.results) == 1
     assert hrl.results[0].name == "Ibis Madrid"
+
+
+def test_itinerary_response_accepts_budget_estimate():
+    from schemas import BudgetEstimate, BudgetLineItem, ItineraryResponse, DayPlan, TimeBlock
+    estimate = BudgetEstimate(
+        line_items=[
+            BudgetLineItem(category="Flights", low_usd=400, high_usd=600),
+            BudgetLineItem(category="Hotels", low_usd=350, high_usd=500),
+            BudgetLineItem(category="Food & Dining", low_usd=150, high_usd=200),
+            BudgetLineItem(category="Activities", low_usd=80, high_usd=120),
+        ],
+        per_person_low_usd=980,
+        per_person_high_usd=1420,
+        group_low_usd=1960,
+        group_high_usd=2840,
+        num_travelers=2,
+        currency_note="All estimates in USD.",
+    )
+    resp = ItineraryResponse(
+        destination="Paris",
+        duration="5 days",
+        itinerary=[DayPlan(day_number=1, blocks=[TimeBlock(time_of_day="morning", activity="Arrive")])],
+        logistics_notes="By train.",
+        budget_estimate=estimate,
+    )
+    assert resp.budget_estimate.num_travelers == 2
+    assert resp.budget_estimate.line_items[0].category == "Flights"
+    assert resp.budget_estimate.per_person_low_usd == 980
+    assert resp.budget_estimate.group_high_usd == 2840
