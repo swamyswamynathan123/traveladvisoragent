@@ -483,7 +483,7 @@ def _render_itinerary(data: dict, weather: dict | None = None, weather_label: st
             for item in budget.get("line_items", []):
                 col1, col2 = st.columns([3, 1])
                 with col1:
-                    st.write(item.get("category", ""))
+                    st.markdown(item.get("category", ""))
                     if item.get("notes"):
                         st.caption(item["notes"])
                 with col2:
@@ -498,11 +498,11 @@ def _render_itinerary(data: dict, weather: dict | None = None, weather_label: st
                 plow = budget.get("per_person_low_usd", 0)
                 phigh = budget.get("per_person_high_usd", 0)
                 st.markdown(f"**${plow:,}–${phigh:,}**")
-            num = budget.get("num_travelers", 1)
-            if num > 1:
+            num_travelers = budget.get("num_travelers", 1)
+            if num_travelers > 1:
                 col1, col2 = st.columns([3, 1])
                 with col1:
-                    st.markdown(f"**Total ({num} travelers)**")
+                    st.markdown(f"**Total ({num_travelers} travelers)**")
                 with col2:
                     glow = budget.get("group_low_usd", 0)
                     ghigh = budget.get("group_high_usd", 0)

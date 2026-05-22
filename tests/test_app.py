@@ -88,3 +88,57 @@ def test_render_itinerary_without_budget_estimate_skips_expander():
 
     expander_calls = [str(c) for c in _st.expander.call_args_list]
     assert not any("Budget Estimate" in c for c in expander_calls)
+
+
+def test_render_itinerary_group_total_shown_when_multiple_travelers():
+    from app import _render_itinerary
+
+    _st.columns.side_effect = lambda *a, **k: [MagicMock(), MagicMock()]
+
+    data = {
+        "destination": "Paris",
+        "duration": "3 days",
+        "itinerary": [],
+        "budget_estimate": {
+            "line_items": [],
+            "per_person_low_usd": 980,
+            "per_person_high_usd": 1420,
+            "group_low_usd": 1960,
+            "group_high_usd": 2840,
+            "num_travelers": 2,
+            "currency_note": "All estimates in USD.",
+        },
+    }
+    _st.reset_mock()
+    _st.columns.side_effect = lambda *a, **k: [MagicMock(), MagicMock()]
+    _render_itinerary(data)
+
+    markdown_calls = [str(c) for c in _st.markdown.call_args_list]
+    assert any("2 travelers" in c for c in markdown_calls)
+
+
+def test_render_itinerary_group_total_hidden_for_solo():
+    from app import _render_itinerary
+
+    _st.columns.side_effect = lambda *a, **k: [MagicMock(), MagicMock()]
+
+    data = {
+        "destination": "Tokyo",
+        "duration": "5 days",
+        "itinerary": [],
+        "budget_estimate": {
+            "line_items": [],
+            "per_person_low_usd": 800,
+            "per_person_high_usd": 1200,
+            "group_low_usd": 800,
+            "group_high_usd": 1200,
+            "num_travelers": 1,
+            "currency_note": "All estimates in USD.",
+        },
+    }
+    _st.reset_mock()
+    _st.columns.side_effect = lambda *a, **k: [MagicMock(), MagicMock()]
+    _render_itinerary(data)
+
+    markdown_calls = [str(c) for c in _st.markdown.call_args_list]
+    assert not any("travelers" in c for c in markdown_calls)
